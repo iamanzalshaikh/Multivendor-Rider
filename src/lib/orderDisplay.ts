@@ -26,6 +26,19 @@ export function itemCount(order: RiderOrder): number {
   return items.reduce((sum, i) => sum + (i.quantity ?? 1), 0);
 }
 
+export function pickCoord(
+  ...sources: Array<{ latitude?: number; longitude?: number } | null | undefined>
+): { latitude: number; longitude: number } | null {
+  for (const s of sources) {
+    const lat = Number(s?.latitude);
+    const lng = Number(s?.longitude);
+    if (Number.isFinite(lat) && Number.isFinite(lng) && !(lat === 0 && lng === 0)) {
+      return { latitude: lat, longitude: lng };
+    }
+  }
+  return null;
+}
+
 export function pickRestaurantCoord(order: RiderOrder): { latitude: number; longitude: number } | null {
   const restaurant = order.restaurantId;
   if (!restaurant || typeof restaurant !== 'object') return null;
@@ -34,23 +47,22 @@ export function pickRestaurantCoord(order: RiderOrder): { latitude: number; long
     longitude?: number;
     location?: { coordinates?: number[] };
   };
-  if (Number.isFinite(r.latitude) && Number.isFinite(r.longitude)) {
-    return { latitude: r.latitude!, longitude: r.longitude! };
-  }
+  const direct = pickCoord({ latitude: r.latitude, longitude: r.longitude });
+  if (direct) return direct;
   const coords = r.location?.coordinates;
   if (coords && coords.length >= 2) {
-    return { latitude: coords[1]!, longitude: coords[0]! };
+    return pickCoord({ latitude: coords[1], longitude: coords[0] });
   }
   return null;
 }
 
 export function pickCustomerCoord(order: RiderOrder): { latitude: number; longitude: number } | null {
-  const addr = order.customerAddress ?? order.deliveryAddress;
-  if (!addr) return null;
-  const lat = Number(addr.latitude);
-  const lng = Number(addr.longitude);
-  if (Number.isFinite(lat) && Number.isFinite(lng)) {
-    return { latitude: lat, longitude: lng };
-  }
-  return null;
+  return pickCoord(order.customerAddress, order.deliveryAddress);
+}
+
+export function pickRiderCoord(
+  gps: { latitude: number; longitude: number } | null | undefined,
+  order?: RiderOrder | null,
+): { latitude: number; longitude: number } | null {
+  return pickCoord(gps, order?.riderLocation);
 }

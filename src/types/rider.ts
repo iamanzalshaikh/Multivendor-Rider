@@ -68,6 +68,8 @@ export type RiderOrder = {
     _id: string;
     restaurantName?: string;
     phone?: string;
+    latitude?: number;
+    longitude?: number;
     address?: { street?: string; city?: string };
     location?: { coordinates?: [number, number] };
   };
@@ -76,6 +78,7 @@ export type RiderOrder = {
     fullName?: string;
     mobile?: string;
   };
+  riderLocation?: { latitude: number; longitude: number; heading?: number };
   createdAt?: string;
   riderId?: string | null;
 };

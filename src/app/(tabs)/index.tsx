@@ -1,5 +1,6 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
+import { memo, useCallback, useEffect, useState } from 'react';
 import {
   View,
   StyleSheet,
@@ -8,62 +9,63 @@ import {
   ActivityIndicator,
   RefreshControl,
   Image,
+  Alert,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
+import { EarningsHeroCard } from '@/components/EarningsHeroCard';
 import { ScreenHeader } from '@/components/screen-header';
+import { SectionCard } from '@/components/section-card';
+import { StatCard, StatGrid } from '@/components/stat-card';
 import { TabScrollView } from '@/components/tab-scroll-view';
 import { ThemedText } from '@/components/themed-text';
+import { VerificationBanner } from '@/components/verification-banner';
 import { cardStyle, Layout } from '@/constants/layout';
 import { Fonts, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
+import { useRiderProfile } from '@/hooks/use-rider-profile';
+import {
+  useDeliveryHistoryQuery,
+  useEarningsSummaryQuery,
+  useRiderEarningsQuery,
+  useRiderOrderCache,
+  prefetchRiderOrder,
+} from '@/hooks/queries/rider';
+import { invalidateAvailableOrders, invalidateRiderProfile } from '@/lib/riderQueryInvalidation';
 import { useUnreadNotificationCount } from '@/hooks/use-unread-notifications';
 import { hasUploadedImage } from '@/lib/imageUtils';
 import { emitRiderOnlineStatus } from '@/lib/riderSocketActions';
-import {
-  fetchDeliveryHistory,
-  fetchEarningsSummary,
-  fetchOrderById,
-  fetchRiderEarnings,
-  fetchRiderProfile,
-  RIDER_FEE,
-  updateRiderOnlineStatus,
-} from '@/services/riders';
+import { RIDER_FEE, updateRiderOnlineStatus } from '@/services/riders';
 import { useRiderStore } from '@/stores/riderStore';
+import type { VerificationStatus } from '@/types/rider';
 
-function StatTile({
+const QuickAction = memo(function QuickAction({
   label,
-  value,
   hint,
-  accent,
+  icon,
+  onPress,
 }: {
   label: string;
-  value: string;
-  hint?: string;
-  accent?: boolean;
+  hint: string;
+  icon: keyof typeof Ionicons.glyphMap;
+  onPress: () => void;
 }) {
   const theme = useTheme();
   return (
-    <View style={[styles.statTile, cardStyle, { backgroundColor: theme.backgroundElement }]}>
-      <ThemedText type="label" themeColor="textSecondary">
-        {label}
+    <Pressable
+      onPress={onPress}
+      style={[styles.actionBtn, cardStyle, { backgroundColor: theme.backgroundElement }]}>
+      <View style={[styles.actionIcon, { backgroundColor: theme.primarySoft }]}>
+        <Ionicons name={icon} size={18} color={theme.primary} />
+      </View>
+      <ThemedText style={styles.actionLabel}>{label}</ThemedText>
+      <ThemedText type="small" themeColor="textSecondary">
+        {hint}
       </ThemedText>
-      <ThemedText
-        style={[
-          styles.statValue,
-          accent ? { color: theme.partner } : { color: theme.text },
-        ]}>
-        {value}
-      </ThemedText>
-      {hint ? (
-        <ThemedText type="small" themeColor="textSecondary" style={styles.statHint}>
-          {hint}
-        </ThemedText>
-      ) : null}
-    </View>
+    </Pressable>
   );
-}
+});
 
 function SectionHeader({ title, action }: { title: string; action?: ReactNode }) {
   return (
@@ -81,64 +83,71 @@ export default function HomeScreen() {
   const rider = useRiderStore((s) => s.rider);
   const setRider = useRiderStore((s) => s.setRider);
   const unreadCount = useUnreadNotificationCount();
+  const [loadHistory, setLoadHistory] = useState(false);
 
-  const meQ = useQuery({
-    queryKey: ['rider', 'me'],
-    queryFn: () => import('@/services/riders').then((m) => m.fetchRiderMe()),
-    staleTime: 60_000,
-  });
+  useEffect(() => {
+    const timer = setTimeout(() => setLoadHistory(true), 400);
+    return () => clearTimeout(timer);
+  }, []);
 
-  const profileQ = useQuery({
-    queryKey: ['rider', 'profile'],
-    queryFn: fetchRiderProfile,
-  });
+  const {
+    rider: profileRider,
+    user,
+    onlineStatus,
+    verificationStatus,
+    refetch: refetchProfile,
+  } = useRiderProfile();
 
-  const earningsQ = useQuery({
-    queryKey: ['rider', 'earnings'],
-    queryFn: fetchRiderEarnings,
-  });
+  const earningsQ = useRiderEarningsQuery();
+  const summaryQ = useEarningsSummaryQuery();
+  const historyQ = useDeliveryHistoryQuery(1, 5, loadHistory);
 
-  const summaryQ = useQuery({
-    queryKey: ['rider', 'earnings-summary'],
-    queryFn: fetchEarningsSummary,
-  });
-
-  const historyQ = useQuery({
-    queryKey: ['rider', 'history', 'home'],
-    queryFn: () => fetchDeliveryHistory(1, 5),
-  });
-
-  const currentRider = profileQ.data ?? rider;
-  const profileImage = meQ.data?.rider?.profileImage ?? meQ.data?.user?.profileImage;
+  const currentRider = profileRider ?? rider;
+  const profileImage = user?.profileImage ?? profileRider?.profileImage;
   const activeOrderId = currentRider?.currentOrderId;
+  const isApproved = verificationStatus === 'approved';
 
-  const activeOrderQ = useQuery({
-    queryKey: ['rider', 'active-order', activeOrderId],
-    queryFn: () => fetchOrderById(activeOrderId!),
-    enabled: Boolean(activeOrderId),
-  });
+  useEffect(() => {
+    if (activeOrderId) prefetchRiderOrder(qc, activeOrderId);
+  }, [activeOrderId, qc]);
+
+  const activeOrderQ = useRiderOrderCache(activeOrderId);
 
   const onlineMut = useMutation({
     mutationFn: (online: boolean) => updateRiderOnlineStatus(online),
     onSuccess: (updated) => {
       setRider(updated);
       void emitRiderOnlineStatus(updated.onlineStatus);
-      qc.invalidateQueries({ queryKey: ['rider'] });
+      invalidateRiderProfile(qc);
+      invalidateAvailableOrders(qc);
     },
+    onError: (e) =>
+      Alert.alert('Could not update status', e instanceof Error ? e.message : 'Try again'),
   });
 
   const earnings = earningsQ.data;
   const summary = summaryQ.data;
-  const online = currentRider?.onlineStatus ?? false;
+  const online = onlineStatus;
   const refreshing =
-    profileQ.isRefetching || earningsQ.isRefetching || summaryQ.isRefetching || historyQ.isRefetching;
+    earningsQ.isRefetching || summaryQ.isRefetching || historyQ.isRefetching;
 
-  const fullName = meQ.data?.user?.fullName ?? '';
+  const fullName = user?.fullName ?? '';
   const greeting = fullName
     ? `Hi, ${fullName.split(' ')[0]}`
     : currentRider?.riderCode
-    ? `Hi, ${currentRider.riderCode.split('-')[1] ?? currentRider.riderCode}`
-    : 'Hi, Partner';
+      ? `Hi, ${currentRider.riderCode.split('-')[1] ?? currentRider.riderCode}`
+      : 'Hi, Partner';
+
+  const rating = currentRider?.averageRating?.toFixed(1) ?? '0.0';
+  const pendingPayout = summary?.pendingPayout?.grossEarnings ?? 0;
+  const unpaidCount = summary?.pendingPayout?.deliveryCount ?? 0;
+  const paidOut = summary?.totalPaidOut?.grossEarnings ?? 0;
+  const openActiveOrder = useCallback(() => {
+    if (activeOrderId) {
+      prefetchRiderOrder(qc, activeOrderId);
+      router.push(`/order/${activeOrderId}` as never);
+    }
+  }, [activeOrderId, qc, router]);
 
   return (
     <TabScrollView
@@ -147,7 +156,7 @@ export default function HomeScreen() {
         <RefreshControl
           refreshing={refreshing}
           onRefresh={() => {
-            profileQ.refetch();
+            refetchProfile();
             earningsQ.refetch();
             summaryQ.refetch();
             historyQ.refetch();
@@ -160,7 +169,6 @@ export default function HomeScreen() {
         subtitle="Your delivery dashboard"
         right={
           <View style={styles.headerRight}>
-            {/* Bell */}
             <Pressable
               onPress={() => router.push('/notifications' as never)}
               style={[styles.iconCircle, { borderColor: theme.border, backgroundColor: theme.backgroundElement }]}
@@ -175,7 +183,6 @@ export default function HomeScreen() {
               ) : null}
             </Pressable>
 
-            {/* Online/Offline pill */}
             <View
               style={[
                 styles.statusPill,
@@ -190,7 +197,6 @@ export default function HomeScreen() {
               </ThemedText>
             </View>
 
-            {/* Profile avatar */}
             <Pressable onPress={() => router.push('/(tabs)/profile')} hitSlop={8}>
               {hasUploadedImage(profileImage) ? (
                 <Image source={{ uri: profileImage! }} style={styles.avatar} />
@@ -204,136 +210,173 @@ export default function HomeScreen() {
         }
       />
 
-      {/* Go online */}
-      <View style={[styles.card, cardStyle, { backgroundColor: theme.backgroundElement }]}>
-        <View style={styles.row}>
-          <View style={styles.flex1}>
-            <ThemedText style={styles.cardTitle}>Go online</ThemedText>
-            <ThemedText type="small" themeColor="textSecondary" style={styles.cardSub}>
-              {online
-                ? 'You are visible for new delivery requests'
-                : 'Turn on to start receiving orders'}
-            </ThemedText>
+      <View style={styles.content}>
+        <Pressable
+          disabled={!isApproved || onlineMut.isPending}
+          onPress={() => {
+            if (isApproved && !onlineMut.isPending) onlineMut.mutate(!online);
+          }}
+          style={[
+            styles.onlineCard,
+            cardStyle,
+            {
+              backgroundColor: online ? theme.partnerSoft : theme.backgroundElement,
+              borderColor: online ? theme.partner : theme.border,
+            },
+          ]}>
+          <View style={styles.onlineCardLeft}>
+            <View
+              style={[
+                styles.onlineIconWrap,
+                { backgroundColor: online ? theme.partner : theme.backgroundSelected },
+              ]}>
+              <Ionicons
+                name={online ? 'radio-button-on' : 'radio-button-off'}
+                size={22}
+                color={online ? '#fff' : theme.textSecondary}
+              />
+            </View>
+            <View style={styles.flex1}>
+              <ThemedText style={styles.onlineCardTitle}>
+                {online ? 'You are online' : 'You are offline'}
+              </ThemedText>
+              <ThemedText type="small" themeColor="textSecondary" style={styles.cardSub}>
+                {!isApproved
+                  ? 'Available after admin approves your account'
+                  : online
+                    ? 'Receiving delivery jobs near you'
+                    : 'Tap to go online and accept deliveries'}
+              </ThemedText>
+            </View>
           </View>
           {onlineMut.isPending ? (
-            <ActivityIndicator color={theme.primary} />
+            <ActivityIndicator color={theme.partner} />
           ) : (
             <Switch
               value={online}
+              disabled={!isApproved}
               onValueChange={(v) => onlineMut.mutate(v)}
-              trackColor={{ false: theme.border, true: theme.partnerSoft }}
-              thumbColor={online ? theme.partner : theme.backgroundElement}
+              trackColor={{ false: theme.border, true: theme.partner }}
+              thumbColor="#fff"
+              ios_backgroundColor={theme.border}
             />
           )}
-        </View>
-      </View>
+        </Pressable>
 
-      {/* Analytics KPIs — 2×2 grid */}
-      <View style={styles.statsGrid}>
-        <StatTile
-          label="Today"
-          value={`₹${earnings?.todayEarnings ?? 0}`}
-          hint="Earnings today"
-          accent
-        />
-        <StatTile
-          label="All time"
-          value={`₹${earnings?.totalEarnings ?? 0}`}
-          hint="Total earnings"
-        />
-        <StatTile
-          label="Deliveries"
-          value={`${earnings?.totalDeliveries ?? currentRider?.totalDeliveries ?? 0}`}
-          hint="Completed"
-        />
-        <StatTile
-          label="Pending"
-          value={`₹${summary?.pendingPayout?.grossEarnings ?? 0}`}
-          hint={`${summary?.pendingPayout?.deliveryCount ?? 0} unpaid`}
-        />
-      </View>
+        <VerificationBanner status={verificationStatus as VerificationStatus} />
 
-      {/* Active delivery */}
-      {activeOrderId ? (
-        <View style={styles.section}>
-          <SectionHeader
-            title="Active delivery"
-            action={
-              <Pressable onPress={() => router.push(`/order/${activeOrderId}` as never)}>
-                <ThemedText type="link">Open</ThemedText>
-              </Pressable>
-            }
+        <EarningsHeroCard
+          todayAmount={earnings?.todayEarnings ?? 0}
+          icon="trending-up"
+          meta={[
+            { value: `₹${earnings?.totalEarnings ?? 0}`, label: 'Lifetime' },
+            { value: `${earnings?.totalDeliveries ?? currentRider?.totalDeliveries ?? 0}`, label: 'Deliveries' },
+            { value: `${rating} ★`, label: 'Rating' },
+          ]}
+        />
+
+        <StatGrid>
+          <StatCard
+            label="Pending payout"
+            value={`₹${pendingPayout}`}
+            hint={`${unpaidCount} unpaid`}
+            icon="hourglass-outline"
+            accent="primary"
           />
-          <Pressable
-            onPress={() => router.push(`/order/${activeOrderId}` as never)}
-            style={[styles.activeBanner, cardStyle, { backgroundColor: theme.primarySoft }]}>
-            {activeOrderQ.isLoading ? (
-              <ActivityIndicator color={theme.primary} />
-            ) : (
-              <>
-                <View style={styles.activeTop}>
-                  <ThemedText style={styles.activeOrderId}>
-                    #
-                    {activeOrderQ.data?.orderNumber ??
-                      activeOrderId.slice(-6).toUpperCase()}
-                  </ThemedText>
-                  <View style={[styles.activeBadge, { backgroundColor: theme.primary }]}>
-                    <ThemedText style={styles.activeBadgeText}>
-                      {(activeOrderQ.data?.orderStatus ?? 'ACTIVE').replace(/_/g, ' ')}
+          <StatCard
+            label="Paid out"
+            value={`₹${paidOut}`}
+            hint="Transferred"
+            icon="checkmark-circle-outline"
+            accent="partner"
+          />
+          <StatCard
+            label="Per delivery"
+            value={`₹${summary?.earningPerDelivery ?? RIDER_FEE}`}
+            hint="Completion fee"
+            icon="bicycle-outline"
+            accent="default"
+          />
+          <StatCard
+            label="Account"
+            value={isApproved ? 'Approved' : verificationStatus === 'rejected' ? 'Rejected' : 'Pending'}
+            hint="Admin verification"
+            icon="shield-checkmark-outline"
+            accent={isApproved ? 'partner' : verificationStatus === 'rejected' ? 'warning' : 'primary'}
+          />
+        </StatGrid>
+
+        {activeOrderId ? (
+          <View style={styles.section}>
+            <SectionHeader
+              title="Active delivery"
+              action={
+                <Pressable onPress={openActiveOrder}>
+                  <ThemedText type="link">Open</ThemedText>
+                </Pressable>
+              }
+            />
+            <Pressable
+              onPressIn={() => activeOrderId && prefetchRiderOrder(qc, activeOrderId)}
+              onPress={openActiveOrder}
+              style={[styles.activeBanner, cardStyle, { backgroundColor: theme.primarySoft }]}>
+              {activeOrderQ.isLoading ? (
+                <ActivityIndicator color={theme.primary} />
+              ) : (
+                <>
+                  <View style={styles.activeTop}>
+                    <ThemedText style={styles.activeOrderId}>
+                      #
+                      {activeOrderQ.data?.orderNumber ?? activeOrderId.slice(-6).toUpperCase()}
                     </ThemedText>
+                    <View style={[styles.activeBadge, { backgroundColor: theme.primary }]}>
+                      <ThemedText style={styles.activeBadgeText}>
+                        {(activeOrderQ.data?.orderStatus ?? 'ACTIVE').replace(/_/g, ' ')}
+                      </ThemedText>
+                    </View>
                   </View>
-                </View>
-                <ThemedText type="small" themeColor="textSecondary" style={{ marginTop: 6 }}>
-                  Tap to continue delivery · ₹{RIDER_FEE} on completion
-                </ThemedText>
-              </>
-            )}
-          </Pressable>
-        </View>
-      ) : null}
+                  <ThemedText type="small" themeColor="textSecondary" style={{ marginTop: 6 }}>
+                    Tap to continue delivery · ₹{RIDER_FEE} on completion
+                  </ThemedText>
+                </>
+              )}
+            </Pressable>
+          </View>
+        ) : null}
 
-      {/* Quick actions */}
-      <View style={styles.section}>
-        <SectionHeader title="Quick actions" />
-        <View style={styles.actionsRow}>
-          <Pressable
-            onPress={() => router.push('/(tabs)/jobs')}
-            style={[styles.actionBtn, cardStyle, { backgroundColor: theme.backgroundElement }]}>
-            <ThemedText style={styles.actionLabel}>Jobs</ThemedText>
-            <ThemedText type="small" themeColor="textSecondary">
-              Accept deliveries
-            </ThemedText>
-          </Pressable>
-          <Pressable
-            onPress={() => router.push('/(tabs)/orders')}
-            style={[styles.actionBtn, cardStyle, { backgroundColor: theme.backgroundElement }]}>
-            <ThemedText style={styles.actionLabel}>Trip</ThemedText>
-            <ThemedText type="small" themeColor="textSecondary">
-              Active delivery
-            </ThemedText>
-          </Pressable>
-          <Pressable
-            onPress={() => router.push('/(tabs)/earnings')}
-            style={[styles.actionBtn, cardStyle, { backgroundColor: theme.backgroundElement }]}>
-            <ThemedText style={styles.actionLabel}>Earnings</ThemedText>
-            <ThemedText type="small" themeColor="textSecondary">
-              Payouts
-            </ThemedText>
-          </Pressable>
+        <View style={styles.section}>
+          <SectionHeader title="Quick actions" />
+          <View style={styles.actionsRow}>
+            <QuickAction
+              label="Jobs"
+              hint="Accept deliveries"
+              icon="briefcase-outline"
+              onPress={() => router.push('/(tabs)/jobs')}
+            />
+            <QuickAction
+              label="Trip"
+              hint="Active delivery"
+              icon="navigate-outline"
+              onPress={() => router.push('/(tabs)/orders')}
+            />
+            <QuickAction
+              label="Earnings"
+              hint="Payouts"
+              icon="wallet-outline"
+              onPress={() => router.push('/(tabs)/earnings')}
+            />
+          </View>
         </View>
-      </View>
 
-      {/* Recent deliveries */}
-      <View style={styles.section}>
-        <SectionHeader
+        <SectionCard
           title="Recent deliveries"
+          subtitle="Last 5 completed trips"
           action={
             <Pressable onPress={() => router.push('/(tabs)/earnings')}>
               <ThemedText type="link">See all</ThemedText>
             </Pressable>
           }
-        />
-        <View style={[styles.listCard, cardStyle, { backgroundColor: theme.backgroundElement }]}>
+          noPadding>
           {historyQ.isLoading ? (
             <ActivityIndicator color={theme.primary} style={{ paddingVertical: Spacing.three }} />
           ) : (historyQ.data?.orders ?? []).length === 0 ? (
@@ -348,6 +391,9 @@ export default function HomeScreen() {
                   styles.listRow,
                   i < arr.length - 1 && { borderBottomWidth: 1, borderBottomColor: theme.border },
                 ]}>
+                <View style={[styles.tripIcon, { backgroundColor: theme.partnerSoft }]}>
+                  <Ionicons name="bicycle" size={16} color={theme.partner} />
+                </View>
                 <View style={styles.flex1}>
                   <ThemedText style={styles.listPrimary}>
                     #{o.orderNumber ?? o._id.slice(-6).toUpperCase()}
@@ -358,46 +404,126 @@ export default function HomeScreen() {
                       : 'Restaurant'}
                   </ThemedText>
                 </View>
-                <ThemedText style={[styles.listAmount, { color: theme.partner }]}>
-                  +₹{RIDER_FEE}
-                </ThemedText>
+                <ThemedText style={[styles.listAmount, { color: theme.partner }]}>+₹{RIDER_FEE}</ThemedText>
               </View>
             ))
           )}
-        </View>
+        </SectionCard>
+
+        <Pressable
+          onPress={() => router.push(activeOrderId ? '/(tabs)/orders' : '/(tabs)/jobs')}
+          style={[styles.cta, { backgroundColor: theme.primary, opacity: isApproved ? 1 : 0.55 }]}
+          disabled={!isApproved}>
+          <ThemedText style={styles.ctaText}>
+            {!isApproved
+              ? 'Waiting for admin approval'
+              : !online
+                ? 'Go online to see jobs'
+                : activeOrderId
+                  ? 'Continue active trip'
+                  : 'Browse delivery jobs'}
+          </ThemedText>
+        </Pressable>
       </View>
-
-      {/* Primary CTA */}
-      <Pressable
-        onPress={() => router.push(activeOrderId ? '/(tabs)/orders' : '/(tabs)/jobs')}
-        style={[styles.cta, { backgroundColor: theme.primary }]}>
-        <ThemedText style={styles.ctaText}>
-          {!online
-            ? 'Go online to see jobs'
-            : activeOrderId
-              ? 'Continue active trip'
-              : 'Browse delivery jobs'}
-        </ThemedText>
-      </Pressable>
-
-      {profileQ.isLoading && !currentRider ? (
-        <ActivityIndicator style={{ marginTop: Spacing.three }} color={theme.primary} />
-      ) : null}
     </TabScrollView>
   );
 }
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
+  content: {
+    paddingHorizontal: Layout.screenPadding,
+    paddingBottom: Spacing.four,
+  },
   flex1: { flex: 1 },
+  onlineCard: {
+    marginTop: Spacing.two,
+    marginBottom: Spacing.three,
+    padding: Spacing.three,
+    borderWidth: 1.5,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: Spacing.two,
+  },
+  onlineCardLeft: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.two,
+  },
+  onlineIconWrap: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  onlineCardTitle: { fontSize: 16, fontFamily: Fonts.extraBold },
   card: {
-    marginHorizontal: Layout.screenPadding,
+    marginTop: Spacing.three,
     marginBottom: Spacing.two,
     padding: Spacing.three,
   },
   row: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two },
   cardTitle: { fontSize: 15, fontFamily: Fonts.extraBold },
   cardSub: { marginTop: 4 },
+  heroCard: {
+    borderRadius: Layout.cardRadius,
+    padding: Spacing.three,
+    marginBottom: Spacing.three,
+  },
+  heroTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+  },
+  heroLabel: {
+    color: 'rgba(255,255,255,0.85)',
+    fontSize: 13,
+    fontFamily: Fonts.medium,
+  },
+  heroAmount: {
+    color: '#fff',
+    fontSize: 34,
+    fontFamily: Fonts.extraBold,
+    marginTop: 4,
+    letterSpacing: -0.5,
+  },
+  heroIconWrap: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(255,255,255,0.18)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  heroDivider: {
+    height: 1,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    marginVertical: Spacing.three,
+  },
+  heroMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  heroMetaItem: { flex: 1, alignItems: 'center' },
+  heroMetaDivider: {
+    width: 1,
+    height: 28,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+  },
+  heroMetaValue: {
+    color: '#fff',
+    fontSize: 16,
+    fontFamily: Fonts.extraBold,
+  },
+  heroMetaLabel: {
+    color: 'rgba(255,255,255,0.8)',
+    fontSize: 10,
+    fontFamily: Fonts.medium,
+    marginTop: 2,
+  },
   statusPill: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -449,24 +575,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  statsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: Spacing.two,
-    paddingHorizontal: Layout.screenPadding,
-    marginBottom: Spacing.two,
-  },
-  statTile: {
-    width: '47.5%',
-    flexGrow: 1,
-    minHeight: 96,
-    padding: Spacing.three,
-    justifyContent: 'space-between',
-  },
-  statValue: { fontSize: 22, fontFamily: Fonts.extraBold, marginTop: Spacing.one },
-  statHint: { marginTop: 2 },
   section: {
-    paddingHorizontal: Layout.screenPadding,
     marginBottom: Spacing.three,
   },
   sectionHeader: {
@@ -490,22 +599,37 @@ const styles = StyleSheet.create({
   actionBtn: {
     flex: 1,
     padding: Spacing.two,
-    minHeight: 72,
-    justifyContent: 'center',
+    minHeight: 88,
+    justifyContent: 'flex-start',
+    gap: 4,
   },
-  actionLabel: { fontSize: 13, fontFamily: Fonts.extraBold, marginBottom: 2 },
-  listCard: { overflow: 'hidden' },
+  actionIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 2,
+  },
+  actionLabel: { fontSize: 13, fontFamily: Fonts.extraBold },
   listRow: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: Spacing.three,
     paddingVertical: 12,
+    gap: Spacing.two,
+  },
+  tripIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   listPrimary: { fontSize: 13, fontFamily: Fonts.bold },
   listAmount: { fontSize: 14, fontFamily: Fonts.extraBold },
   emptyText: { padding: Spacing.three, textAlign: 'center' },
   cta: {
-    marginHorizontal: Layout.screenPadding,
     marginTop: Spacing.one,
     borderRadius: Layout.buttonRadius,
     paddingVertical: 16,

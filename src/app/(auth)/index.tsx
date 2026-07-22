@@ -16,6 +16,7 @@ import { ThemedText } from '@/components/themed-text';
 import { Layout, cardStyle } from '@/constants/layout';
 import { Brand, Fonts, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
+import { extractApiErrorMessage } from '@/lib/apiErrors';
 import { loginWithEmailPassword } from '@/lib/auth';
 import { ENV_INFO } from '@/config/env';
 
@@ -38,7 +39,7 @@ export default function LoginScreen() {
       await loginWithEmailPassword({ email: email.trim(), password });
       router.replace('/(tabs)');
     } catch (e) {
-      const message = e instanceof Error ? e.message : 'Login failed';
+      const message = extractApiErrorMessage(e, 'Login failed');
       setError(message);
       if (message.toLowerCase().includes('pending admin approval')) {
         router.push({

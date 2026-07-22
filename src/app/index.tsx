@@ -5,6 +5,8 @@ import { ActivityIndicator, View } from 'react-native';
 import { Brand } from '@/constants/theme';
 import { refreshAccessToken } from '@/lib/tokenRefresh';
 import { getAccessToken, getRefreshToken } from '@/lib/storage';
+import { fetchRiderProfile } from '@/services/riders';
+import { useRiderStore } from '@/stores/riderStore';
 
 const BOOT_TIMEOUT_MS = 5000;
 
@@ -40,6 +42,15 @@ export default function Index() {
         }
         if (!alive) return;
         clearTimeout(fallback);
+        if (token) {
+          try {
+            const profile = await withTimeout(fetchRiderProfile(), BOOT_TIMEOUT_MS);
+            if (alive) useRiderStore.getState().setRider(profile);
+          } catch {
+            // Tabs will refetch profile
+          }
+        }
+        if (!alive) return;
         setTarget(token ? 'tabs' : 'auth');
       } catch {
         if (!alive) return;

@@ -8,9 +8,11 @@ export type DeliveryMapProps = {
   rider?: { latitude: number; longitude: number } | null;
   riderHeading?: number;
   routePath?: Array<{ latitude: number; longitude: number }>;
+  routeLoading?: boolean;
   height?: number;
   followRider?: boolean;
   fullScreen?: boolean;
+  orderStatus?: string;
 };
 
 function hasAnyCoord(props: DeliveryMapProps) {

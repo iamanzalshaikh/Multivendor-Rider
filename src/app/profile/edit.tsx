@@ -23,6 +23,7 @@ import { useTheme } from '@/hooks/use-theme';
 import { hasLocalImage, hasUploadedImage, imageStatusLabel } from '@/lib/imageUtils';
 import { isLocalImageUri, uploadRiderDocument } from '@/lib/apiUpload';
 import { pickDocumentImage, takeDocumentPhoto } from '@/lib/pickDocumentImage';
+import { invalidateRiderProfile } from '@/lib/riderQueryInvalidation';
 import { fetchRiderMe, updateRiderProfile } from '@/services/riders';
 import { useRiderStore } from '@/stores/riderStore';
 import type { VehicleType } from '@/types/rider';
@@ -228,7 +229,7 @@ export default function EditProfileScreen() {
     },
     onSuccess: (data) => {
       setRider(data.rider);
-      qc.invalidateQueries({ queryKey: ['rider'] });
+      invalidateRiderProfile(qc);
       Alert.alert('Saved', 'Profile updated successfully.');
       router.back();
     },

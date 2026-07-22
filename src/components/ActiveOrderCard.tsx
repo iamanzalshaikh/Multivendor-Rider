@@ -1,5 +1,7 @@
+import { memo, useCallback } from 'react';
 import { View, StyleSheet, Pressable, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
+import { useQueryClient } from '@tanstack/react-query';
 import { Ionicons } from '@expo/vector-icons';
 
 import { DeliveryProgressBar } from '@/components/DeliveryProgressBar';
@@ -9,6 +11,7 @@ import { actionButtonLabel, nextRiderAction, RIDER_STATUS_LABELS } from '@/const
 import { cardStyle, Layout } from '@/constants/layout';
 import { Fonts, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
+import { prefetchRiderOrder } from '@/hooks/queries/rider';
 import { formatDeliveryAddress, formatRestaurantAddress, orderDisplayId } from '@/lib/orderDisplay';
 import type { RiderOrder } from '@/types/rider';
 
@@ -18,9 +21,10 @@ type Props = {
   onAction: (action: 'pickup' | 'start' | 'complete' | 'reject') => void;
 };
 
-export function ActiveOrderCard({ order, busy, onAction }: Props) {
+export const ActiveOrderCard = memo(function ActiveOrderCard({ order, busy, onAction }: Props) {
   const theme = useTheme();
   const router = useRouter();
+  const qc = useQueryClient();
   const restaurant =
     typeof order.restaurantId === 'object' ? order.restaurantId?.restaurantName ?? 'Restaurant' : 'Restaurant';
   const restaurantPhone =
@@ -34,6 +38,14 @@ export function ActiveOrderCard({ order, busy, onAction }: Props) {
   const next = nextRiderAction(order.orderStatus);
   const canReject = order.orderStatus === 'RIDER_ASSIGNED';
 
+  const openDetails = useCallback(() => {
+    router.push(`/order/${order._id}` as never);
+  }, [order._id, router]);
+
+  const prefetchDetails = useCallback(() => {
+    prefetchRiderOrder(qc, order._id);
+  }, [qc, order._id]);
+
   return (
     <View style={[styles.card, cardStyle, { backgroundColor: theme.backgroundElement }]}>
       <View style={[styles.statusBar, { backgroundColor: theme.primarySoft }]}>
@@ -45,7 +57,8 @@ export function ActiveOrderCard({ order, busy, onAction }: Props) {
       <View style={styles.top}>
         <ThemedText style={styles.orderId}>{orderDisplayId(order)}</ThemedText>
         <Pressable
-          onPress={() => router.push(`/order/${order._id}` as never)}
+          onPressIn={prefetchDetails}
+          onPress={openDetails}
           style={[styles.detailsBtn, { borderColor: theme.border }]}>
           <ThemedText type="link" style={styles.detailsText}>
             Details
@@ -122,7 +135,7 @@ export function ActiveOrderCard({ order, busy, onAction }: Props) {
       </View>
     </View>
   );
-}
+});
 
 const styles = StyleSheet.create({
   card: { overflow: 'hidden', marginBottom: Spacing.two },

@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   View,
   StyleSheet,
@@ -16,43 +16,27 @@ import { TabScrollView } from '@/components/tab-scroll-view';
 import { ThemedText } from '@/components/themed-text';
 import { Layout } from '@/constants/layout';
 import { Fonts, Spacing } from '@/constants/theme';
+import { useRiderOrderCache } from '@/hooks/queries/rider';
+import { invalidateAfterDeliveryComplete, invalidateAfterOrderAction } from '@/lib/riderQueryInvalidation';
 import { useTabBarHeight } from '@/hooks/use-tab-bar-height';
+import { useRiderProfile } from '@/hooks/use-rider-profile';
 import { useTheme } from '@/hooks/use-theme';
 import {
   completeDelivery,
-  fetchOrderById,
-  fetchRiderProfile,
   pickupOrder,
   rejectOrder,
   startDelivery,
 } from '@/services/riders';
-import { useRiderStore } from '@/stores/riderStore';
 
 export default function TripScreen() {
   const theme = useTheme();
   const router = useRouter();
   const qc = useQueryClient();
   const tabBarHeight = useTabBarHeight();
-  const rider = useRiderStore((s) => s.rider);
-  const setRider = useRiderStore((s) => s.setRider);
+  const { rider, onlineStatus, currentOrderId: activeOrderId, refetch: refetchProfile, isLoading: profileLoading } =
+    useRiderProfile();
 
-  const profileQ = useQuery({
-    queryKey: ['rider', 'profile'],
-    queryFn: async () => {
-      const p = await fetchRiderProfile();
-      setRider(p);
-      return p;
-    },
-  });
-
-  const activeOrderId = profileQ.data?.currentOrderId ?? rider?.currentOrderId;
-
-  const activeOrderQ = useQuery({
-    queryKey: ['rider', 'active-order', activeOrderId],
-    queryFn: () => fetchOrderById(activeOrderId!),
-    enabled: Boolean(activeOrderId),
-    refetchInterval: activeOrderId ? 10000 : false,
-  });
+  const activeOrderQ = useRiderOrderCache(activeOrderId);
 
   const actionMut = useMutation({
     mutationFn: async ({
@@ -67,17 +51,31 @@ export default function TripScreen() {
       if (action === 'start') return startDelivery(orderId);
       return completeDelivery(orderId);
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['rider'] }),
+    onSuccess: (_, { orderId, action }) => {
+      if (action === 'complete') {
+        invalidateAfterDeliveryComplete(qc, orderId);
+      } else {
+        invalidateAfterOrderAction(qc, orderId);
+      }
+    },
     onError: (e) => Alert.alert('Action failed', e instanceof Error ? e.message : 'Try again'),
   });
 
-  if (!rider?.onlineStatus) {
+  if (profileLoading && !rider) {
+    return (
+      <View style={[styles.center, { backgroundColor: theme.background, paddingBottom: tabBarHeight }]}>
+        <ActivityIndicator color={theme.primary} />
+      </View>
+    );
+  }
+
+  if (!onlineStatus) {
     return (
       <View style={[styles.center, { backgroundColor: theme.background, paddingBottom: tabBarHeight }]}>
         <Ionicons name="cloud-offline-outline" size={48} color={theme.textSecondary} />
         <ThemedText style={styles.emptyTitle}>You are offline</ThemedText>
         <ThemedText type="small" themeColor="textSecondary" style={styles.emptySub}>
-          Go online from Home to start delivering.
+          Use the online toggle on Home to start delivering.
         </ThemedText>
       </View>
     );
@@ -116,7 +114,7 @@ export default function TripScreen() {
             refreshing={activeOrderQ.isRefetching}
             onRefresh={() => {
               activeOrderQ.refetch();
-              profileQ.refetch();
+              refetchProfile();
             }}
           />
         }>

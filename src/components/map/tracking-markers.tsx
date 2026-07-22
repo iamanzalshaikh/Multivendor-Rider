@@ -32,11 +32,13 @@ export function TrackingMarker({
   coordinate,
   zIndex = 1,
   heading,
+  navigationPov = false,
 }: {
   kind: TrackingMarkerKind;
   coordinate: Coord;
   zIndex?: number;
   heading?: number;
+  navigationPov?: boolean;
 }) {
   const meta = MARKER_META[kind];
 
@@ -48,9 +50,9 @@ export function TrackingMarker({
         anchor={{ x: 0.5, y: 0.5 }}
         zIndex={zIndex}
         tracksViewChanges={false}
-        flat
+        flat={navigationPov}
       >
-        <RiderArrowPin heading={heading} />
+        <RiderArrowPin heading={navigationPov ? 0 : heading} />
       </Marker>
     );
   }

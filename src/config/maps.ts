@@ -9,6 +9,8 @@ type GoogleMapsExtra = {
   routes?: string;
 };
 
+const TAG = '🗺️ [RIDER MAP]';
+
 const extra =
   (Constants.expoConfig?.extra?.googleMaps as GoogleMapsExtra | undefined) ??
   (Constants as { easConfig?: { googleMaps?: GoogleMapsExtra } }).easConfig?.googleMaps ??
@@ -30,5 +32,15 @@ export function getNativeMapsApiKey(): string {
 }
 
 export function hasGoogleMapsConfigured(): boolean {
-  return Boolean(getNativeMapsApiKey());
+  const configured = Boolean(getNativeMapsApiKey());
+  if (__DEV__) {
+    console.log(TAG, 'API key check', {
+      configured,
+      android: GOOGLE_MAPS_ANDROID_KEY ? `${GOOGLE_MAPS_ANDROID_KEY.slice(0, 8)}…` : 'missing',
+      fromEnv: Boolean(process.env.EXPO_PUBLIC_GOOGLE_MAPS_ANDROID_KEY),
+      fromAppJson: Boolean(extra.android),
+      package: Constants.expoConfig?.android?.package,
+    });
+  }
+  return configured;
 }

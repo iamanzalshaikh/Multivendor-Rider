@@ -1,63 +1,79 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   View,
   StyleSheet,
   ActivityIndicator,
   RefreshControl,
   Alert,
+  FlatList,
+  Platform,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { useCallback } from 'react';
 
 import { AvailableOrderCard } from '@/components/AvailableOrderCard';
 import { ScreenHeader } from '@/components/screen-header';
-import { TabScrollView } from '@/components/tab-scroll-view';
 import { ThemedText } from '@/components/themed-text';
-import { Layout, cardStyle } from '@/constants/layout';
+import { Layout } from '@/constants/layout';
 import { Fonts, Spacing } from '@/constants/theme';
+import { useAvailableOrdersQuery } from '@/hooks/queries/rider';
+import { invalidateAfterOrderAction } from '@/lib/riderQueryInvalidation';
 import { useTabBarHeight } from '@/hooks/use-tab-bar-height';
+import { useRiderProfile } from '@/hooks/use-rider-profile';
 import { useTheme } from '@/hooks/use-theme';
-import { acceptOrder, fetchAvailableOrders, fetchRiderProfile } from '@/services/riders';
-import { useRiderStore } from '@/stores/riderStore';
+import { acceptOrder } from '@/services/riders';
+import type { RiderOrder } from '@/types/rider';
 
 export default function JobsScreen() {
   const theme = useTheme();
   const router = useRouter();
   const qc = useQueryClient();
   const tabBarHeight = useTabBarHeight();
-  const rider = useRiderStore((s) => s.rider);
-  const setRider = useRiderStore((s) => s.setRider);
-  const hasActive = Boolean(rider?.currentOrderId);
+  const { rider, onlineStatus, currentOrderId, isLoading: profileLoading } = useRiderProfile();
+  const hasActive = Boolean(currentOrderId);
 
-  const profileQ = useQuery({
-    queryKey: ['rider', 'profile'],
-    queryFn: async () => {
-      const p = await fetchRiderProfile();
-      setRider(p);
-      return p;
-    },
-  });
-
-  const availableQ = useQuery({
-    queryKey: ['rider', 'available-orders'],
-    queryFn: fetchAvailableOrders,
-    enabled: Boolean(rider?.onlineStatus),
-    refetchInterval: rider?.onlineStatus ? 10000 : false,
-  });
+  const availableQ = useAvailableOrdersQuery(onlineStatus, hasActive);
 
   const acceptMut = useMutation({
     mutationFn: (orderId: string) => acceptOrder(orderId),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['rider'] });
+    onSuccess: (_, orderId) => {
+      invalidateAfterOrderAction(qc, orderId);
       router.push('/(tabs)/orders');
     },
     onError: (e) => Alert.alert('Could not accept', e instanceof Error ? e.message : 'Try again'),
   });
 
-  const activeOrderId = profileQ.data?.currentOrderId ?? rider?.currentOrderId;
+  const handleAccept = useCallback(
+    (orderId: string) => {
+      if (!acceptMut.isPending) acceptMut.mutate(orderId);
+    },
+    [acceptMut],
+  );
+
+  const activeOrderId = currentOrderId;
   const available = (availableQ.data ?? []).filter((o) => o._id !== activeOrderId);
 
-  if (!rider?.onlineStatus) {
+  const renderJob = useCallback(
+    ({ item }: { item: RiderOrder }) => (
+      <AvailableOrderCard
+        order={item}
+        busy={acceptMut.isPending}
+        onAccept={() => handleAccept(item._id)}
+      />
+    ),
+    [acceptMut.isPending, handleAccept],
+  );
+
+  if (profileLoading && !rider) {
+    return (
+      <View style={[styles.center, { backgroundColor: theme.background, paddingBottom: tabBarHeight }]}>
+        <ActivityIndicator color={theme.primary} />
+      </View>
+    );
+  }
+
+  if (!onlineStatus) {
     return (
       <View style={[styles.center, { backgroundColor: theme.background, paddingBottom: tabBarHeight }]}>
         <View style={[styles.offlineIcon, { backgroundColor: theme.backgroundElement }]}>
@@ -65,7 +81,7 @@ export default function JobsScreen() {
         </View>
         <ThemedText style={styles.centerTitle}>Go online first</ThemedText>
         <ThemedText type="small" themeColor="textSecondary" style={styles.centerSub}>
-          Turn on online mode from Home to see delivery jobs near you.
+          Turn on online mode from Home — use the toggle at the top of your dashboard.
         </ThemedText>
       </View>
     );
@@ -102,36 +118,35 @@ export default function JobsScreen() {
         }
       />
 
-      <TabScrollView
+      <FlatList
+        data={available}
+        keyExtractor={(item) => item._id}
+        renderItem={renderJob}
         style={styles.flex1}
+        contentContainerStyle={available.length ? styles.list : styles.listEmpty}
+        initialNumToRender={4}
+        maxToRenderPerBatch={6}
+        windowSize={5}
+        removeClippedSubviews={Platform.OS === 'android'}
         refreshControl={
           <RefreshControl refreshing={availableQ.isRefetching} onRefresh={() => availableQ.refetch()} />
-        }>
-        {availableQ.isLoading ? (
-          <ActivityIndicator color={theme.primary} style={{ marginTop: Spacing.four }} />
-        ) : available.length > 0 ? (
-          <View style={styles.list}>
-            {available.map((item) => (
-              <AvailableOrderCard
-                key={item._id}
-                order={item}
-                busy={acceptMut.isPending}
-                onAccept={() => acceptMut.mutate(item._id)}
-              />
-            ))}
-          </View>
-        ) : (
-          <View style={styles.center}>
-            <View style={[styles.offlineIcon, { backgroundColor: theme.backgroundElement }]}>
-              <Ionicons name="time-outline" size={40} color={theme.textSecondary} />
+        }
+        ListEmptyComponent={
+          availableQ.isLoading ? (
+            <ActivityIndicator color={theme.primary} style={{ marginTop: Spacing.four }} />
+          ) : (
+            <View style={styles.center}>
+              <View style={[styles.offlineIcon, { backgroundColor: theme.backgroundElement }]}>
+                <Ionicons name="time-outline" size={40} color={theme.textSecondary} />
+              </View>
+              <ThemedText style={styles.centerTitle}>No jobs right now</ThemedText>
+              <ThemedText type="small" themeColor="textSecondary" style={styles.centerSub}>
+                New offers appear when restaurants mark orders ready for pickup.
+              </ThemedText>
             </View>
-            <ThemedText style={styles.centerTitle}>No jobs right now</ThemedText>
-            <ThemedText type="small" themeColor="textSecondary" style={styles.centerSub}>
-              New offers appear when restaurants mark orders ready for pickup.
-            </ThemedText>
-          </View>
-        )}
-      </TabScrollView>
+          )
+        }
+      />
     </View>
   );
 }
@@ -139,7 +154,8 @@ export default function JobsScreen() {
 const styles = StyleSheet.create({
   root: { flex: 1 },
   flex1: { flex: 1 },
-  list: { paddingHorizontal: Layout.screenPadding },
+  list: { paddingHorizontal: Layout.screenPadding, paddingBottom: Spacing.four },
+  listEmpty: { flexGrow: 1 },
   center: {
     flex: 1,
     alignItems: 'center',

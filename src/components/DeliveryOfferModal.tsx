@@ -14,6 +14,7 @@ import { ThemedText } from '@/components/themed-text';
 import { cardStyle, Layout } from '@/constants/layout';
 import { Fonts, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
+import { invalidateAfterOrderAction } from '@/lib/riderQueryInvalidation';
 import { acceptOrder, RIDER_FEE } from '@/services/riders';
 import { useDeliveryOfferStore } from '@/stores/deliveryOfferStore';
 import { useRiderStore } from '@/stores/riderStore';
@@ -31,7 +32,7 @@ export function DeliveryOfferModal() {
     mutationFn: (orderId: string) => acceptOrder(orderId),
     onSuccess: (_order, orderId) => {
       clearOffer(orderId);
-      void qc.invalidateQueries({ queryKey: ['rider'] });
+      invalidateAfterOrderAction(qc, orderId);
       router.replace('/(tabs)/orders');
     },
     onError: (e, orderId) => {

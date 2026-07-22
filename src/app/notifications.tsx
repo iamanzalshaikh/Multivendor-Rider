@@ -6,15 +6,18 @@ import {
   RefreshControl,
   Pressable,
   ActivityIndicator,
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { memo, useCallback } from 'react';
 
 import { ThemedText } from '@/components/themed-text';
 import { cardStyle, Layout } from '@/constants/layout';
 import { Fonts, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
+import { notificationKeys } from '@/hooks/queries/keys';
 import {
   fetchNotifications,
   markAllNotificationsRead,
@@ -32,7 +35,7 @@ function formatTimeAgo(value: string) {
   return new Date(value).toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
 }
 
-function NotificationRow({
+const NotificationRow = memo(function NotificationRow({
   item,
   onPress,
 }: {
@@ -69,7 +72,7 @@ function NotificationRow({
       {!item.isRead ? <View style={[styles.unreadDot, { backgroundColor: theme.primary }]} /> : null}
     </Pressable>
   );
-}
+});
 
 export default function NotificationsScreen() {
   const theme = useTheme();
@@ -77,8 +80,10 @@ export default function NotificationsScreen() {
   const qc = useQueryClient();
 
   const listQ = useQuery({
-    queryKey: ['notifications'],
+    queryKey: notificationKeys.list(1),
     queryFn: () => fetchNotifications(1, 50),
+    staleTime: 60_000,
+    refetchOnMount: false,
   });
 
   const readMut = useMutation({
@@ -100,12 +105,22 @@ export default function NotificationsScreen() {
   const notifications = listQ.data?.notifications ?? [];
   const unread = notifications.filter((n) => !n.isRead).length;
 
-  function onOpen(item: AppNotification) {
-    if (!item.isRead) readMut.mutate(item._id);
-    if (item.redirectType === 'ORDER' && item.redirectId) {
-      router.push(`/order/${item.redirectId}` as never);
-    }
-  }
+  const onOpen = useCallback(
+    (item: AppNotification) => {
+      if (!item.isRead) readMut.mutate(item._id);
+      if (item.redirectType === 'ORDER' && item.redirectId) {
+        router.push(`/order/${item.redirectId}` as never);
+      }
+    },
+    [readMut, router],
+  );
+
+  const renderItem = useCallback(
+    ({ item }: { item: AppNotification }) => (
+      <NotificationRow item={item} onPress={() => onOpen(item)} />
+    ),
+    [onOpen],
+  );
 
   return (
     <SafeAreaView style={[styles.root, { backgroundColor: theme.background }]} edges={['top']}>
@@ -131,6 +146,11 @@ export default function NotificationsScreen() {
         <FlatList
           data={notifications}
           keyExtractor={(item) => item._id}
+          renderItem={renderItem}
+          initialNumToRender={12}
+          maxToRenderPerBatch={10}
+          windowSize={7}
+          removeClippedSubviews={Platform.OS === 'android'}
           refreshControl={
             <RefreshControl refreshing={listQ.isRefetching} onRefresh={() => listQ.refetch()} />
           }
@@ -144,7 +164,6 @@ export default function NotificationsScreen() {
               </ThemedText>
             </View>
           }
-          renderItem={({ item }) => <NotificationRow item={item} onPress={() => onOpen(item)} />}
         />
       )}
     </SafeAreaView>

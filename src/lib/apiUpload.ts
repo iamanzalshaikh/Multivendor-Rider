@@ -1,4 +1,5 @@
 import { getApiUrl } from '@/config/env';
+import { apiErrorFromResponse } from '@/lib/apiErrors';
 import { getAccessToken } from '@/lib/storage';
 import {
   isRNFormData,
@@ -7,18 +8,16 @@ import {
   toUploadFile,
 } from '@/lib/multipart';
 
-type UploadError = Error & { status?: number; data?: unknown };
-
 function parseUploadResponse(xhr: XMLHttpRequest) {
   const text = xhr.responseText;
-  const data = text ? JSON.parse(text) : null;
+  let data: { message?: string; error?: string } | null = null;
+  try {
+    data = text ? JSON.parse(text) : null;
+  } catch {
+    data = null;
+  }
   if (xhr.status < 200 || xhr.status >= 300) {
-    const err = new Error(
-      (data as { message?: string })?.message ?? `Upload failed: ${xhr.status}`,
-    ) as UploadError;
-    err.status = xhr.status;
-    err.data = data;
-    throw err;
+    throw apiErrorFromResponse(xhr.status, data, `Upload failed (${xhr.status})`);
   }
   return data;
 }

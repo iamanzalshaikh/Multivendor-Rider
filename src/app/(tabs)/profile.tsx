@@ -1,4 +1,3 @@
-import { useQuery } from '@tanstack/react-query';
 import { View, StyleSheet, Pressable, ActivityIndicator, Alert, Image } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -6,15 +5,16 @@ import { Ionicons } from '@expo/vector-icons';
 import { ScreenHeader } from '@/components/screen-header';
 import { TabScrollView } from '@/components/tab-scroll-view';
 import { ThemedText } from '@/components/themed-text';
+import { VerificationBanner } from '@/components/verification-banner';
 import { cardStyle, Layout } from '@/constants/layout';
 import { Fonts, Spacing } from '@/constants/theme';
+import { useRiderProfile } from '@/hooks/use-rider-profile';
 import { useTheme } from '@/hooks/use-theme';
 import { hasUploadedImage } from '@/lib/imageUtils';
 import { logout } from '@/lib/auth';
 import { disconnectSocket } from '@/lib/socketClient';
-import { fetchRiderMe } from '@/services/riders';
-import { useRiderStore } from '@/stores/riderStore';
 import { ENV_INFO } from '@/config/env';
+import type { VerificationStatus } from '@/types/rider';
 
 function InfoRow({
   label,
@@ -62,15 +62,7 @@ function StatusChip({ ok, label }: { ok: boolean; label: string }) {
 export default function ProfileScreen() {
   const theme = useTheme();
   const router = useRouter();
-  const rider = useRiderStore((s) => s.rider);
-
-  const meQ = useQuery({
-    queryKey: ['rider', 'me'],
-    queryFn: fetchRiderMe,
-  });
-
-  const data = meQ.data?.rider ?? rider;
-  const user = meQ.data?.user;
+  const { rider: data, user, isLoading } = useRiderProfile();
 
   const kycComplete =
     hasUploadedImage(data?.profileImage) &&
@@ -81,6 +73,7 @@ export default function ProfileScreen() {
       data?.bankAccountDetails?.accountNumber &&
       data?.bankAccountDetails?.ifscCode,
   );
+  const verificationStatus = (data?.verificationStatus ?? 'pending') as VerificationStatus;
 
   async function onLogout() {
     Alert.alert('Log out', 'End your session?', [
@@ -112,10 +105,14 @@ export default function ProfileScreen() {
         }
       />
 
-      {meQ.isLoading && !data ? (
+      {isLoading && !data ? (
         <ActivityIndicator color={theme.primary} style={{ marginTop: Spacing.four }} />
       ) : (
         <>
+          <View style={styles.content}>
+            <VerificationBanner status={verificationStatus} />
+          </View>
+
           <View style={[styles.hero, cardStyle, { backgroundColor: theme.backgroundElement }]}>
             {hasUploadedImage(data?.profileImage) ? (
               <Image source={{ uri: data!.profileImage! }} style={styles.avatarImg} />
@@ -129,6 +126,16 @@ export default function ProfileScreen() {
               {data?.riderCode} · {user?.email ?? ''}
             </ThemedText>
             <View style={styles.chipRow}>
+              <StatusChip
+                ok={verificationStatus === 'approved'}
+                label={
+                  verificationStatus === 'approved'
+                    ? 'Admin approved'
+                    : verificationStatus === 'rejected'
+                      ? 'Rejected'
+                      : 'Awaiting approval'
+                }
+              />
               <StatusChip ok={kycComplete} label={kycComplete ? 'KYC complete' : 'KYC pending'} />
               <StatusChip ok={bankComplete} label={bankComplete ? 'Bank linked' : 'Add bank'} />
             </View>
@@ -142,8 +149,14 @@ export default function ProfileScreen() {
               icon="bicycle-outline"
             />
             <InfoRow
-              label="Verification"
-              value={(data?.verificationStatus ?? 'approved').toUpperCase()}
+              label="Admin verification"
+              value={
+                verificationStatus === 'approved'
+                  ? 'Approved'
+                  : verificationStatus === 'rejected'
+                    ? 'Rejected'
+                    : 'Pending review'
+              }
               icon="shield-checkmark-outline"
             />
             <InfoRow label="Rating" value={`${data?.averageRating?.toFixed(1) ?? '0.0'} ★`} icon="star-outline" />
@@ -200,6 +213,10 @@ export default function ProfileScreen() {
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
+  content: {
+    paddingHorizontal: Layout.screenPadding,
+    marginBottom: Spacing.two,
+  },
   editBtn: {
     flexDirection: 'row',
     alignItems: 'center',

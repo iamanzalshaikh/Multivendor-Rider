@@ -1,10 +1,13 @@
+import { memo, useCallback } from 'react';
 import { View, StyleSheet, Pressable } from 'react-native';
 import { useRouter } from 'expo-router';
+import { useQueryClient } from '@tanstack/react-query';
 import { Ionicons } from '@expo/vector-icons';
 
 import { ThemedText } from '@/components/themed-text';
 import { cardStyle, Layout } from '@/constants/layout';
 import { Fonts, Spacing } from '@/constants/theme';
+import { prefetchRiderOrder } from '@/hooks/queries/rider';
 import { useTheme } from '@/hooks/use-theme';
 import {
   formatDeliveryAddress,
@@ -21,12 +24,21 @@ type Props = {
   onAccept: () => void;
 };
 
-export function AvailableOrderCard({ order, busy, onAccept }: Props) {
+export const AvailableOrderCard = memo(function AvailableOrderCard({ order, busy, onAccept }: Props) {
   const theme = useTheme();
   const router = useRouter();
+  const qc = useQueryClient();
   const restaurant =
     typeof order.restaurantId === 'object' ? order.restaurantId?.restaurantName ?? 'Restaurant' : 'Restaurant';
   const items = itemCount(order);
+
+  const openDetails = useCallback(() => {
+    router.push(`/order/${order._id}` as never);
+  }, [order._id, router]);
+
+  const prefetchDetails = useCallback(() => {
+    prefetchRiderOrder(qc, order._id);
+  }, [qc, order._id]);
 
   return (
     <View style={[styles.card, cardStyle, { backgroundColor: theme.backgroundElement }]}>
@@ -38,7 +50,8 @@ export function AvailableOrderCard({ order, busy, onAccept }: Props) {
           </ThemedText>
         </View>
         <Pressable
-          onPress={() => router.push(`/order/${order._id}` as never)}
+          onPressIn={prefetchDetails}
+          onPress={openDetails}
           hitSlop={8}
           style={[styles.viewBtn, { borderColor: theme.border }]}>
           <ThemedText type="link" style={styles.viewText}>
@@ -103,10 +116,10 @@ export function AvailableOrderCard({ order, busy, onAccept }: Props) {
         disabled={busy}
         style={[styles.acceptBtn, { backgroundColor: theme.partner, opacity: busy ? 0.7 : 1 }]}>
         <ThemedText style={styles.acceptText}>Accept delivery</ThemedText>
-      </Pressable>
-    </View>
+    </Pressable>
+  </View>
   );
-}
+});
 
 const styles = StyleSheet.create({
   card: { padding: Spacing.three, marginBottom: Spacing.two },

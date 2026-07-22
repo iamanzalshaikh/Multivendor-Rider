@@ -2,19 +2,17 @@ import { useEffect } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 
 import { alertNewDeliveryOffer } from '@/lib/pushNotifications';
+import {
+  invalidateAfterSocketOrderEvent,
+  invalidateAvailableOrders,
+} from '@/lib/riderQueryInvalidation';
 import { connectSocket, getSocketInstance } from '@/lib/socketClient';
 import { emitRiderOnlineStatus } from '@/lib/riderSocketActions';
-import { ServerSocketEvents } from '@/lib/socketEvents';
+import { ServerSocketEvents, type OrderSocketPayload } from '@/lib/socketEvents';
 import { useDeliveryOfferStore } from '@/stores/deliveryOfferStore';
 import { useRiderStore } from '@/stores/riderStore';
 
-type DeliveryAvailablePayload = {
-  orderId?: string;
-  orderNumber?: string;
-  restaurantName?: string;
-  grandTotal?: number;
-  acceptTimeoutSeconds?: number;
-};
+type DeliveryAvailablePayload = OrderSocketPayload;
 
 type DeliveryClaimedPayload = {
   orderId?: string;
@@ -42,10 +40,6 @@ export function useRiderSocket(enabled: boolean) {
 
     let alive = true;
 
-    const refresh = () => {
-      void qc.invalidateQueries({ queryKey: ['rider'] });
-    };
-
     const onDeliveryAvailable = (payload: DeliveryAvailablePayload) => {
       const rider = useRiderStore.getState().rider;
       if (rider?.currentOrderId) return;
@@ -63,16 +57,22 @@ export function useRiderSocket(enabled: boolean) {
         restaurantName: payload.restaurantName ?? 'Restaurant',
       });
       void qc.invalidateQueries({ queryKey: ['notifications', 'unread-count'] });
-      refresh();
+      invalidateAvailableOrders(qc);
     };
 
     const onDeliveryClaimed = (payload: DeliveryClaimedPayload) => {
       if (payload.orderId) clearOffer(payload.orderId);
-      refresh();
+      invalidateAfterSocketOrderEvent(
+        qc,
+        ServerSocketEvents.DELIVERY_CLAIMED,
+        payload.orderId,
+      );
     };
 
     const refreshHandlers = REFRESH_EVENTS.map((event) => {
-      const handler = () => refresh();
+      const handler = (payload: OrderSocketPayload = {}) => {
+        invalidateAfterSocketOrderEvent(qc, event, payload.orderId);
+      };
       return { event, handler };
     });
 
@@ -87,7 +87,7 @@ export function useRiderSocket(enabled: boolean) {
         s.on(ServerSocketEvents.DELIVERY_CLAIMED, onDeliveryClaimed);
         refreshHandlers.forEach(({ event, handler }) => s.on(event, handler));
       } catch {
-        // orders tab polls as fallback
+        // layout polls active order as fallback when socket is down
       }
     })();
 

@@ -5,6 +5,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { DeliveryOfferModal } from '@/components/DeliveryOfferModal';
 import { Fonts } from '@/constants/theme';
+import { useActiveOrderPolling } from '@/hooks/queries/rider';
+import { useRiderProfile } from '@/hooks/use-rider-profile';
 import { usePushNotifications } from '@/hooks/use-push-notifications';
 import { useTabBadges } from '@/hooks/use-tab-badges';
 import { useRiderLocationTracking } from '@/hooks/use-rider-location';
@@ -15,11 +17,14 @@ import { useRiderStore } from '@/stores/riderStore';
 export default function TabsLayout() {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
+  const { onlineStatus, currentOrderId } = useRiderProfile();
   const rider = useRiderStore((s) => s.rider);
-  const online = rider?.onlineStatus ?? false;
-  const hasActive = Boolean(rider?.currentOrderId);
+  const online = onlineStatus;
+  const hasActive = Boolean(currentOrderId ?? rider?.currentOrderId);
+  const activeOrderId = currentOrderId ?? rider?.currentOrderId;
   const { jobCount, hasActiveTrip } = useTabBadges();
 
+  useActiveOrderPolling(activeOrderId, online && hasActive);
   useRiderLocationTracking(online && hasActive);
   useRiderSocket(online);
   usePushNotifications(true);

@@ -5,9 +5,15 @@ export type RiderGpsCoord = {
   latitude: number;
   longitude: number;
   heading?: number;
+  speed?: number;
 } | null;
 
-/** Live rider GPS for map arrow marker. */
+function normalizeHeading(value?: number | null) {
+  if (value == null || !Number.isFinite(value) || value < 0) return undefined;
+  return value;
+}
+
+/** Live rider GPS — tuned for navigation / map follow. */
 export function useRiderGps(enabled = true): RiderGpsCoord {
   const [coord, setCoord] = useState<RiderGpsCoord>(null);
 
@@ -17,44 +23,68 @@ export function useRiderGps(enabled = true): RiderGpsCoord {
       return;
     }
 
-    let sub: Location.LocationSubscription | null = null;
+    let positionSub: Location.LocationSubscription | null = null;
+    let headingSub: Location.LocationSubscription | null = null;
     let alive = true;
+    let lastHeading: number | undefined;
+
+    const apply = (latitude: number, longitude: number, heading?: number, speed?: number) => {
+      const h = normalizeHeading(heading) ?? lastHeading;
+      if (h != null) lastHeading = h;
+      setCoord({ latitude, longitude, heading: h, speed });
+    };
 
     (async () => {
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== 'granted' || !alive) return;
 
       const current = await Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.Balanced,
+        accuracy: Location.Accuracy.High,
       }).catch(() => null);
+
       if (current && alive) {
-        setCoord({
-          latitude: current.coords.latitude,
-          longitude: current.coords.longitude,
-          heading: current.coords.heading ?? undefined,
-        });
+        apply(
+          current.coords.latitude,
+          current.coords.longitude,
+          current.coords.heading ?? undefined,
+          current.coords.speed ?? undefined,
+        );
       }
 
-      sub = await Location.watchPositionAsync(
+      positionSub = await Location.watchPositionAsync(
         {
           accuracy: Location.Accuracy.High,
-          distanceInterval: 15,
-          timeInterval: 8_000,
+          distanceInterval: 4,
+          timeInterval: 2_000,
         },
         (loc) => {
           if (!alive) return;
-          setCoord({
-            latitude: loc.coords.latitude,
-            longitude: loc.coords.longitude,
-            heading: loc.coords.heading ?? undefined,
-          });
+          apply(
+            loc.coords.latitude,
+            loc.coords.longitude,
+            loc.coords.heading ?? undefined,
+            loc.coords.speed ?? undefined,
+          );
         },
       );
+
+      if (Location.watchHeadingAsync) {
+        try {
+          headingSub = await Location.watchHeadingAsync((h) => {
+            if (!alive) return;
+            const deg = normalizeHeading(h.trueHeading >= 0 ? h.trueHeading : h.magHeading);
+            if (deg != null) lastHeading = deg;
+          });
+        } catch {
+          // Heading watcher optional on some Android devices.
+        }
+      }
     })();
 
     return () => {
       alive = false;
-      sub?.remove();
+      positionSub?.remove();
+      headingSub?.remove();
     };
   }, [enabled]);
 

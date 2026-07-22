@@ -1,4 +1,5 @@
 import { getApiUrl } from '@/config/env';
+import { apiErrorFromResponse } from '@/lib/apiErrors';
 import { isRNFormData } from '@/lib/multipart';
 import { clearTokens, getAccessToken, getRefreshToken, setTokens } from '@/lib/storage';
 
@@ -56,10 +57,7 @@ export async function apiFetch<T = unknown>(
     const text = await res.text();
     const data = text ? (JSON.parse(text) as Json) : null;
     if (!res.ok) {
-      const err = new Error((data as { message?: string })?.message ?? `Request failed: ${res.status}`) as ApiError;
-      err.status = res.status;
-      err.data = data;
-      throw err;
+      throw apiErrorFromResponse(res.status, data as { message?: string; error?: string }, `Request failed (${res.status})`);
     }
     return data as T;
   }
@@ -94,12 +92,11 @@ export async function apiFetch<T = unknown>(
   const retryText = await retryRes.text();
   const retryData = retryText ? (JSON.parse(retryText) as Json) : null;
   if (!retryRes.ok) {
-    const err = new Error(
-      (retryData as { message?: string })?.message ?? `Request failed: ${retryRes.status}`,
-    ) as ApiError;
-    err.status = retryRes.status;
-    err.data = retryData;
-    throw err;
+    throw apiErrorFromResponse(
+      retryRes.status,
+      retryData as { message?: string; error?: string },
+      `Request failed (${retryRes.status})`,
+    );
   }
   return retryData as T;
 }

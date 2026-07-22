@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   View,
   StyleSheet,
@@ -28,12 +28,17 @@ import {
   orderDisplayId,
   pickCustomerCoord,
   pickRestaurantCoord,
+  pickRiderCoord,
 } from '@/lib/orderDisplay';
+import { useOrderRoutePath } from '@/hooks/use-order-route-path';
+import { useRiderOrderQuery } from '@/hooks/queries/rider';
+import {
+  invalidateAfterDeliveryComplete,
+  invalidateAfterOrderAction,
+} from '@/lib/riderQueryInvalidation';
 import {
   acceptOrder,
   completeDelivery,
-  fetchOrderById,
-  fetchOrderRoute,
   pickupOrder,
   rejectOrder,
   startDelivery,
@@ -52,12 +57,7 @@ export default function OrderDetailScreen() {
   const router = useRouter();
   const qc = useQueryClient();
 
-  const orderQ = useQuery({
-    queryKey: ['rider', 'order', orderId],
-    queryFn: () => fetchOrderById(orderId!),
-    enabled: Boolean(orderId),
-    retry: 1,
-  });
+  const orderQ = useRiderOrderQuery(orderId);
 
   useOrderLocationPing(orderQ.data?.orderStatus);
 
@@ -66,17 +66,21 @@ export default function OrderDetailScreen() {
       ['RIDER_ASSIGNED', 'PICKED_UP', 'ON_THE_WAY', 'READY_FOR_PICKUP'].includes(orderQ.data.orderStatus),
   );
   const riderGps = useRiderGps(isActiveTrip);
+  const orderDetail = orderQ.data;
+  const restaurantCoord = orderDetail ? pickRestaurantCoord(orderDetail) : null;
+  const customerCoord = orderDetail ? pickCustomerCoord(orderDetail) : null;
+  const riderCoord = pickRiderCoord(
+    riderGps ? { latitude: riderGps.latitude, longitude: riderGps.longitude } : null,
+    orderDetail,
+  );
 
-  const routeQ = useQuery({
-    queryKey: [
-      'rider-order-route',
-      orderId,
-      riderGps ? Math.round(riderGps.latitude * 200) : 0,
-      riderGps ? Math.round(riderGps.longitude * 200) : 0,
-    ],
-    queryFn: () => fetchOrderRoute(orderId!),
-    enabled: Boolean(orderId) && isActiveTrip,
-    staleTime: 45_000,
+  const routeQ = useOrderRoutePath({
+    orderId,
+    orderStatus: orderDetail?.orderStatus,
+    restaurant: restaurantCoord,
+    customer: customerCoord,
+    rider: riderCoord,
+    enabled: Boolean(orderDetail),
   });
 
   const actionMut = useMutation({
@@ -89,8 +93,12 @@ export default function OrderDetailScreen() {
       return rejectOrder(orderId);
     },
     onSuccess: (_, action) => {
-      qc.invalidateQueries({ queryKey: ['rider'] });
-      orderQ.refetch();
+      if (!orderId) return;
+      if (action === 'complete') {
+        invalidateAfterDeliveryComplete(qc, orderId);
+      } else {
+        invalidateAfterOrderAction(qc, orderId);
+      }
       if (action === 'accept' || action === 'complete') {
         router.replace('/(tabs)/orders');
       }
@@ -135,7 +143,7 @@ export default function OrderDetailScreen() {
   }
 
   const order = orderQ.data;
-  const restaurant =
+  const restaurantName =
     typeof order.restaurantId === 'object' ? order.restaurantId?.restaurantName ?? 'Restaurant' : 'Restaurant';
   const restaurantPhone =
     typeof order.restaurantId === 'object'
@@ -165,12 +173,14 @@ export default function OrderDetailScreen() {
 
       <View style={styles.mapSection}>
           <DeliveryMap
-            restaurant={pickRestaurantCoord(order)}
-            customer={pickCustomerCoord(order)}
-            rider={riderGps ? { latitude: riderGps.latitude, longitude: riderGps.longitude } : null}
+            restaurant={restaurantCoord}
+            customer={customerCoord}
+            rider={riderCoord}
             riderHeading={riderGps?.heading}
             routePath={routeQ.data}
+            routeLoading={routeQ.isLoading}
             followRider={isActiveTrip}
+            orderStatus={order.orderStatus}
             height={220}
           />
         <Pressable
@@ -192,7 +202,7 @@ export default function OrderDetailScreen() {
         <OrderLocationBlock
           type="pickup"
           title="Pickup from"
-          name={restaurant}
+          name={restaurantName}
           address={formatRestaurantAddress(order)}
           phone={restaurantPhone}
         />

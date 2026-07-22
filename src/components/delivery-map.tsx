@@ -3,14 +3,9 @@ import type { ComponentType } from 'react';
 import { MapErrorBoundary } from '@/components/map/MapErrorBoundary';
 import { DeliveryMapFallback, type DeliveryMapProps } from '@/components/delivery-map-fallback';
 import { hasNativeMapsModule } from '@/lib/canUseNativeMaps';
+import { logMapDebug } from '@/lib/mapDebug';
 
 export type { DeliveryMapProps };
-
-function hasAnyCoord(props: DeliveryMapProps) {
-  return [props.customer, props.restaurant, props.rider].some(
-    (c) => c && Number.isFinite(c.latitude) && Number.isFinite(c.longitude),
-  );
-}
 
 let NativeDeliveryMap: ComponentType<DeliveryMapProps> | null = null;
 
@@ -24,11 +19,16 @@ if (hasNativeMapsModule()) {
 }
 
 export function DeliveryMap(props: DeliveryMapProps) {
-  if (!hasAnyCoord(props) || !NativeDeliveryMap) {
+  if (!NativeDeliveryMap) {
+    if (__DEV__) {
+      logMapDebug('Using fallback — native maps module not linked', {
+        hint: 'Run: npx expo run:android --device (not Expo Go)',
+      });
+    }
     return <DeliveryMapFallback {...props} />;
   }
   return (
-    <MapErrorBoundary height={props.fullScreen ? undefined : props.height ?? 220}>
+    <MapErrorBoundary fullScreen={props.fullScreen} height={props.height ?? 220}>
       <NativeDeliveryMap {...props} />
     </MapErrorBoundary>
   );
