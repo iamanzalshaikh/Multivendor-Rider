@@ -15,7 +15,7 @@ import {
   itemCount,
   orderDisplayId,
 } from '@/lib/orderDisplay';
-import { RIDER_FEE } from '@/services/riders';
+import { formatJmd, riderEarningForOrder } from '@/lib/money';
 import type { RiderOrder } from '@/types/rider';
 
 type Props = {
@@ -46,7 +46,10 @@ export const AvailableOrderCard = memo(function AvailableOrderCard({ order, busy
         <View style={styles.headerLeft}>
           <ThemedText style={styles.orderId}>{orderDisplayId(order)}</ThemedText>
           <ThemedText style={styles.earnBadge}>
-            Earn <ThemedText style={{ color: theme.partner, fontFamily: Fonts.extraBold }}>₹{RIDER_FEE}</ThemedText>
+            Earn{' '}
+            <ThemedText style={{ color: theme.partner, fontFamily: Fonts.extraBold }}>
+              {formatJmd(riderEarningForOrder(order))}
+            </ThemedText>
           </ThemedText>
         </View>
         <Pressable
@@ -95,7 +98,7 @@ export const AvailableOrderCard = memo(function AvailableOrderCard({ order, busy
           <ThemedText type="label" themeColor="textSecondary">
             Order
           </ThemedText>
-          <ThemedText style={styles.metaVal}>₹{order.grandTotal}</ThemedText>
+          <ThemedText style={styles.metaVal}>{formatJmd(order.grandTotal)}</ThemedText>
         </View>
         <View style={styles.metaCell}>
           <ThemedText type="label" themeColor="textSecondary">
@@ -107,7 +110,7 @@ export const AvailableOrderCard = memo(function AvailableOrderCard({ order, busy
           <ThemedText type="label" themeColor="textSecondary">
             Payment
           </ThemedText>
-          <ThemedText style={styles.metaVal}>{order.paymentMethod === 'COD' ? 'COD' : 'Paid'}</ThemedText>
+          <ThemedText style={styles.metaVal}>{order.paymentMethod === 'COD' ? 'COD' : 'Online'}</ThemedText>
         </View>
       </View>
 

@@ -15,7 +15,8 @@ import { cardStyle, Layout } from '@/constants/layout';
 import { Fonts, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { invalidateAfterOrderAction } from '@/lib/riderQueryInvalidation';
-import { acceptOrder, RIDER_FEE } from '@/services/riders';
+import { formatJmd } from '@/lib/money';
+import { acceptOrder } from '@/services/riders';
 import { useDeliveryOfferStore } from '@/stores/deliveryOfferStore';
 import { useRiderStore } from '@/stores/riderStore';
 
@@ -75,7 +76,7 @@ export function DeliveryOfferModal() {
           <ThemedText style={styles.orderId}>#{offer.orderNumber}</ThemedText>
           <ThemedText style={styles.restaurant}>{offer.restaurantName}</ThemedText>
           <ThemedText type="small" themeColor="textSecondary" style={styles.meta}>
-            Order value ₹{offer.grandTotal} · You earn ₹{RIDER_FEE}
+            Order value {formatJmd(offer.grandTotal)} · You earn {formatJmd(offer.riderEarning)}
           </ThemedText>
 
           <View style={[styles.timerRow, { backgroundColor: theme.primarySoft }]}>

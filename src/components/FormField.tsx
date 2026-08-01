@@ -1,7 +1,8 @@
 import { View, StyleSheet, TextInput, type KeyboardTypeOptions } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
-import { Layout, Fonts, Spacing } from '@/constants/theme';
+import { Layout } from '@/constants/layout';
+import { Fonts, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 
 type Props = {

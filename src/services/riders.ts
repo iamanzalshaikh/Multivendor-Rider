@@ -3,7 +3,12 @@ import { apiFetch } from '@/lib/apiFetch';
 import { logFormDataParts, toUploadFile } from '@/lib/multipart';
 import type { ApiEnvelope, RiderEarnings, RiderOrder, RiderProfile, RiderUser, VehicleType } from '@/types/rider';
 
-const RIDER_FEE = 40;
+/**
+ * @deprecated Riders earn the order's delivery fee + tip, not a flat rate.
+ * Use riderEarningForOrder() from '@/lib/money'. Kept only as a display fallback
+ * when an order payload has no fee attached yet.
+ */
+const RIDER_FEE = 0;
 
 export { RIDER_FEE };
 
@@ -124,50 +129,81 @@ export async function updateRiderLocation(input: {
   });
 }
 
+function asRiderOrder(data: unknown, fallbackId?: string): RiderOrder {
+  if (data && typeof data === 'object') {
+    const o = data as RiderOrder & { id?: string };
+    if (!o._id && o.id) return { ...o, _id: o.id };
+    if (o._id) return o;
+  }
+  return { _id: fallbackId ?? '' } as RiderOrder;
+}
+
 export async function fetchAvailableOrders() {
-  const body = await apiFetch<ApiEnvelope<{ orders: RiderOrder[] }>>('/riders/available-orders');
-  return body.data?.orders ?? [];
+  const body = await apiFetch<ApiEnvelope<RiderOrder[] | { orders: RiderOrder[] }>>(
+    '/riders/case/available-orders',
+  );
+  const raw = body.data;
+  if (Array.isArray(raw)) return raw.map((o) => asRiderOrder(o));
+  return (raw?.orders ?? []).map((o) => asRiderOrder(o));
 }
 
 export async function acceptOrder(orderId: string) {
-  const body = await apiFetch<ApiEnvelope<{ order: RiderOrder }>>(`/riders/accept-order/${orderId}`, {
+  const body = await apiFetch<ApiEnvelope<RiderOrder>>(`/riders/case/orders/${orderId}/accept`, {
     method: 'PATCH',
   });
-  const order = body.data?.order;
-  if (!order) {
-    return { _id: orderId } as RiderOrder;
-  }
-  return order;
+  return asRiderOrder(body.data, orderId);
 }
 
+/** Hand an accepted order back to the pool. Allowed only before pickup. */
 export async function rejectOrder(orderId: string, reason?: string) {
-  const body = await apiFetch<ApiEnvelope<{ order: RiderOrder }>>(`/riders/reject-order/${orderId}`, {
-    method: 'PATCH',
-    body: JSON.stringify({ reason }),
-  });
-  return body.data!.order;
+  const body = await apiFetch<ApiEnvelope<RiderOrder>>(
+    `/riders/case/orders/${orderId}/release`,
+    {
+      method: 'PATCH',
+      body: JSON.stringify({ reason }),
+    },
+  );
+  return asRiderOrder(body.data, orderId);
 }
 
 export async function pickupOrder(orderId: string) {
-  const body = await apiFetch<ApiEnvelope<{ order: RiderOrder }>>(`/riders/pickup-order/${orderId}`, {
+  const body = await apiFetch<ApiEnvelope<RiderOrder>>(`/riders/case/orders/${orderId}/status`, {
     method: 'PATCH',
+    body: JSON.stringify({ status: 'PICKED_UP' }),
   });
-  return body.data!.order;
+  return asRiderOrder(body.data, orderId);
 }
 
-export async function startDelivery(orderId: string) {
-  const body = await apiFetch<ApiEnvelope<{ order: RiderOrder }>>(`/riders/start-delivery/${orderId}`, {
+export async function markArrived(orderId: string) {
+  const body = await apiFetch<ApiEnvelope<RiderOrder>>(`/riders/case/orders/${orderId}/status`, {
     method: 'PATCH',
+    body: JSON.stringify({ status: 'ARRIVED' }),
   });
-  return body.data!.order;
+  return asRiderOrder(body.data, orderId);
+}
+
+/** @deprecated use markArrived — kept for older call sites */
+export async function startDelivery(orderId: string) {
+  return markArrived(orderId);
 }
 
 export async function completeDelivery(orderId: string) {
-  const body = await apiFetch<ApiEnvelope<{ order: RiderOrder }>>(
-    `/riders/complete-delivery/${orderId}`,
-    { method: 'PATCH' },
+  const body = await apiFetch<ApiEnvelope<{ orderId?: string; commission?: number } & RiderOrder>>(
+    `/riders/case/orders/${orderId}/complete`,
+    { method: 'PATCH', body: JSON.stringify({}) },
   );
-  return body.data!.order;
+  const data = body.data;
+  // Backend returns { orderId, commission } — normalize to a completed RiderOrder stub
+  if (data && typeof data === 'object' && 'orderId' in data && !('_id' in data && (data as RiderOrder)._id)) {
+    const earned = Number((data as { commission?: number }).commission ?? 0);
+    return {
+      _id: String((data as { orderId?: string }).orderId ?? orderId),
+      orderStatus: 'COMPLETED',
+      grandTotal: 0,
+      earnedAmount: earned,
+    } satisfies RiderOrder;
+  }
+  return asRiderOrder(data, orderId);
 }
 
 export async function fetchRiderEarnings() {
@@ -175,16 +211,22 @@ export async function fetchRiderEarnings() {
   return body.data!.earnings;
 }
 
+export type RiderEarningsSummary = {
+  deliveryCount: number;
+  pendingPayout: { deliveryCount: number; grossEarnings: number };
+  totalPaidOut: { deliveryCount: number; grossEarnings: number };
+  totalEarnings: number;
+  todayEarnings: number;
+  earningPerDelivery: number;
+  /** Delivered, but the payment is still awaiting verification */
+  awaitingVerification: { deliveryCount: number; grossEarnings: number };
+  cash: { deliveryCount: number; grossEarnings: number; cashToRemit: number };
+  online: { deliveryCount: number; grossEarnings: number };
+  breakdown: { deliveryFees: number; tips: number };
+};
+
 export async function fetchEarningsSummary() {
-  const body = await apiFetch<
-    ApiEnvelope<{
-      pendingPayout: { deliveryCount: number; grossEarnings: number };
-      totalPaidOut: { deliveryCount: number; grossEarnings: number };
-      totalEarnings: number;
-      todayEarnings: number;
-      earningPerDelivery: number;
-    }>
-  >('/riders/earnings/summary');
+  const body = await apiFetch<ApiEnvelope<RiderEarningsSummary>>('/riders/earnings/summary');
   return body.data!;
 }
 

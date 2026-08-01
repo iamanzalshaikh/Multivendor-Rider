@@ -11,6 +11,7 @@ import { Fonts, Spacing } from '@/constants/theme';
 import { useRiderProfile } from '@/hooks/use-rider-profile';
 import { useTheme } from '@/hooks/use-theme';
 import { hasUploadedImage } from '@/lib/imageUtils';
+import { formatJmd } from '@/lib/money';
 import { logout } from '@/lib/auth';
 import { disconnectSocket } from '@/lib/socketClient';
 import { ENV_INFO } from '@/config/env';
@@ -163,7 +164,7 @@ export default function ProfileScreen() {
             <InfoRow label="Deliveries" value={String(data?.totalDeliveries ?? 0)} icon="cube-outline" />
             <InfoRow
               label="Lifetime earnings"
-              value={`₹${data?.totalEarnings ?? 0}`}
+              value={formatJmd(data?.totalEarnings)}
               icon="wallet-outline"
               last
             />

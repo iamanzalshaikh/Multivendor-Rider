@@ -50,6 +50,9 @@ export function useRiderSocket(enabled: boolean) {
         orderNumber: payload.orderNumber,
         restaurantName: payload.restaurantName ?? 'Restaurant',
         grandTotal: payload.grandTotal ?? 0,
+        riderEarning:
+          payload.riderEarning ??
+          Number(payload.deliveryFee ?? 0) + Number(payload.tipAmount ?? 0),
         acceptTimeoutSeconds: payload.acceptTimeoutSeconds,
       });
       void alertNewDeliveryOffer({

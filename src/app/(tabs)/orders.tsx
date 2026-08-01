@@ -23,9 +23,9 @@ import { useRiderProfile } from '@/hooks/use-rider-profile';
 import { useTheme } from '@/hooks/use-theme';
 import {
   completeDelivery,
+  markArrived,
   pickupOrder,
   rejectOrder,
-  startDelivery,
 } from '@/services/riders';
 
 export default function TripScreen() {
@@ -44,11 +44,13 @@ export default function TripScreen() {
       action,
     }: {
       orderId: string;
-      action: 'reject' | 'pickup' | 'start' | 'complete';
+      action: 'reject' | 'pickup' | 'start' | 'arrived' | 'complete';
     }) => {
       if (action === 'reject') return rejectOrder(orderId);
       if (action === 'pickup') return pickupOrder(orderId);
-      if (action === 'start') return startDelivery(orderId);
+      if (action === 'start' || action === 'arrived') {
+        return markArrived(orderId);
+      }
       return completeDelivery(orderId);
     },
     onSuccess: (_, { orderId, action }) => {

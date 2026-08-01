@@ -5,6 +5,7 @@ import type { ReactNode } from 'react';
 
 import { Layout } from '@/constants/layout';
 import { Spacing, Brand, Fonts } from '@/constants/theme';
+import { formatJmd } from '@/lib/money';
 
 type MetaItem = { value: string; label: string };
 
@@ -27,7 +28,7 @@ export function EarningsHeroCard({ todayAmount, meta, icon = 'wallet', footer }:
         <View style={styles.heroLeft}>
           <Text style={styles.heroLabel}>Today&apos;s earnings</Text>
           <Text style={styles.heroAmount} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.75}>
-            ₹{todayAmount}
+            {formatJmd(todayAmount)}
           </Text>
         </View>
         <View style={styles.heroIconWrap}>

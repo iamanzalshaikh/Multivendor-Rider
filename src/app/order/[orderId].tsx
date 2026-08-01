@@ -15,7 +15,12 @@ import { DeliveryProgressBar } from '@/components/DeliveryProgressBar';
 import { DeliveryMap } from '@/components/delivery-map';
 import { OrderLocationBlock } from '@/components/OrderLocationBlock';
 import { ThemedText } from '@/components/themed-text';
-import { actionButtonLabel, nextRiderAction, RIDER_STATUS_LABELS } from '@/constants/deliveryStatus';
+import {
+  actionButtonLabel,
+  isClaimableOrder,
+  nextRiderAction,
+  RIDER_STATUS_LABELS,
+} from '@/constants/deliveryStatus';
 import { cardStyle, Layout } from '@/constants/layout';
 import { Fonts, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
@@ -42,8 +47,8 @@ import {
   pickupOrder,
   rejectOrder,
   startDelivery,
-  RIDER_FEE,
 } from '@/services/riders';
+import { formatJmd, riderEarningForOrder } from '@/lib/money';
 
 function resolveOrderId(raw: string | string[] | undefined): string | undefined {
   if (!raw) return undefined;
@@ -63,7 +68,7 @@ export default function OrderDetailScreen() {
 
   const isActiveTrip = Boolean(
     orderQ.data?.orderStatus &&
-      ['RIDER_ASSIGNED', 'PICKED_UP', 'ON_THE_WAY', 'READY_FOR_PICKUP'].includes(orderQ.data.orderStatus),
+      ['RIDER_ASSIGNED', 'PICKED_UP', 'ON_THE_WAY', 'ARRIVED', 'READY_FOR_PICKUP'].includes(orderQ.data.orderStatus),
   );
   const riderGps = useRiderGps(isActiveTrip);
   const orderDetail = orderQ.data;
@@ -84,11 +89,11 @@ export default function OrderDetailScreen() {
   });
 
   const actionMut = useMutation({
-    mutationFn: async (action: 'accept' | 'pickup' | 'start' | 'complete' | 'reject') => {
+    mutationFn: async (action: 'accept' | 'pickup' | 'start' | 'arrived' | 'complete' | 'reject') => {
       if (!orderId) throw new Error('Missing order');
       if (action === 'accept') return acceptOrder(orderId);
       if (action === 'pickup') return pickupOrder(orderId);
-      if (action === 'start') return startDelivery(orderId);
+      if (action === 'start' || action === 'arrived') return startDelivery(orderId);
       if (action === 'complete') return completeDelivery(orderId);
       return rejectOrder(orderId);
     },
@@ -99,7 +104,7 @@ export default function OrderDetailScreen() {
       } else {
         invalidateAfterOrderAction(qc, orderId);
       }
-      if (action === 'accept' || action === 'complete') {
+      if (action === 'accept' || action === 'complete' || action === 'reject') {
         router.replace('/(tabs)/orders');
       }
     },
@@ -150,8 +155,7 @@ export default function OrderDetailScreen() {
       ? (order.restaurantId as { phone?: string })?.phone
       : undefined;
   const customer = typeof order.customerId === 'object' ? order.customerId : undefined;
-  const hasRider = Boolean(order.riderId);
-  const isAvailable = order.orderStatus === 'READY_FOR_PICKUP' && !hasRider;
+  const isAvailable = isClaimableOrder(order);
   const next = isAvailable ? null : nextRiderAction(order.orderStatus);
   const items = order.items ?? order.orderItems ?? [];
   const count = itemCount(order);
@@ -237,22 +241,42 @@ export default function OrderDetailScreen() {
 
           <View style={[styles.totalsRow, { borderTopColor: theme.border }]}>
             <ThemedText style={styles.totalLabel}>Order total</ThemedText>
-            <ThemedText style={styles.totalValue}>₹{order.grandTotal}</ThemedText>
+            <ThemedText style={styles.totalValue}>{formatJmd(order.grandTotal)}</ThemedText>
           </View>
           <View style={styles.totalsRow}>
             <ThemedText type="small" themeColor="textSecondary">
               Your earning
             </ThemedText>
-            <ThemedText style={[styles.earnValue, { color: theme.partner }]}>+₹{RIDER_FEE}</ThemedText>
+            <ThemedText style={[styles.earnValue, { color: theme.partner }]}>
+              +{formatJmd(riderEarningForOrder(order))}
+            </ThemedText>
           </View>
+          {order.tipAmount ? (
+            <View style={styles.totalsRow}>
+              <ThemedText type="small" themeColor="textSecondary">
+                Includes tip
+              </ThemedText>
+              <ThemedText type="small" themeColor="textSecondary">
+                {formatJmd(order.tipAmount)}
+              </ThemedText>
+            </View>
+          ) : null}
           {order.paymentMethod === 'COD' ? (
             <View style={[styles.codRow, { backgroundColor: theme.primarySoft }]}>
               <Ionicons name="cash-outline" size={16} color={theme.primary} />
               <ThemedText style={[styles.codText, { color: theme.primary }]}>
-                Collect ₹{order.grandTotal} cash on delivery
+                Collect {formatJmd(order.grandTotal)} cash on delivery
               </ThemedText>
             </View>
-          ) : null}
+          ) : (
+            <View style={[styles.codRow, { backgroundColor: theme.partnerSoft }]}>
+              <Ionicons name="card-outline" size={16} color={theme.partner} />
+              <ThemedText style={[styles.codText, { color: theme.partner }]}>
+                Paid online — collect no cash. Your earning clears once the office
+                verifies the receipt.
+              </ThemedText>
+            </View>
+          )}
         </View>
       </ScrollView>
 

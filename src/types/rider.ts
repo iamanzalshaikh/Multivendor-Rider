@@ -46,7 +46,14 @@ export type RiderOrder = {
   orderNumber?: string;
   orderStatus: string;
   paymentMethod?: string;
+  paymentStatus?: string;
   grandTotal: number;
+  /** Rider's earning for this trip is the delivery fee plus any tip */
+  deliveryFee?: number;
+  tipAmount?: number;
+  /** Set by the complete-delivery response — what was actually credited */
+  earnedAmount?: number;
+  orderSize?: string | null;
   items?: RiderOrderItem[];
   orderItems?: RiderOrderItem[];
   deliveryAddress?: {

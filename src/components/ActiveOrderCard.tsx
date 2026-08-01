@@ -12,13 +12,14 @@ import { cardStyle, Layout } from '@/constants/layout';
 import { Fonts, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { prefetchRiderOrder } from '@/hooks/queries/rider';
+import { formatJmd, riderEarningForOrder } from '@/lib/money';
 import { formatDeliveryAddress, formatRestaurantAddress, orderDisplayId } from '@/lib/orderDisplay';
 import type { RiderOrder } from '@/types/rider';
 
 type Props = {
   order: RiderOrder;
   busy: boolean;
-  onAction: (action: 'pickup' | 'start' | 'complete' | 'reject') => void;
+  onAction: (action: 'pickup' | 'start' | 'arrived' | 'complete' | 'reject') => void;
 };
 
 export const ActiveOrderCard = memo(function ActiveOrderCard({ order, busy, onAction }: Props) {
@@ -93,7 +94,15 @@ export const ActiveOrderCard = memo(function ActiveOrderCard({ order, busy, onAc
           <ThemedText type="label" themeColor="textSecondary">
             Order value
           </ThemedText>
-          <ThemedText style={styles.amount}>₹{order.grandTotal}</ThemedText>
+          <ThemedText style={styles.amount}>{formatJmd(order.grandTotal)}</ThemedText>
+        </View>
+        <View>
+          <ThemedText type="label" themeColor="textSecondary">
+            You earn
+          </ThemedText>
+          <ThemedText style={[styles.amount, { color: theme.partner }]}>
+            {formatJmd(riderEarningForOrder(order))}
+          </ThemedText>
         </View>
         {order.paymentMethod === 'COD' ? (
           <View style={[styles.codBadge, { backgroundColor: theme.primarySoft }]}>

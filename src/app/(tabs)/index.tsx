@@ -36,7 +36,8 @@ import { invalidateAvailableOrders, invalidateRiderProfile } from '@/lib/riderQu
 import { useUnreadNotificationCount } from '@/hooks/use-unread-notifications';
 import { hasUploadedImage } from '@/lib/imageUtils';
 import { emitRiderOnlineStatus } from '@/lib/riderSocketActions';
-import { RIDER_FEE, updateRiderOnlineStatus } from '@/services/riders';
+import { formatJmd, riderEarningForOrder } from '@/lib/money';
+import { updateRiderOnlineStatus } from '@/services/riders';
 import { useRiderStore } from '@/stores/riderStore';
 import type { VerificationStatus } from '@/types/rider';
 
@@ -269,7 +270,7 @@ export default function HomeScreen() {
           todayAmount={earnings?.todayEarnings ?? 0}
           icon="trending-up"
           meta={[
-            { value: `₹${earnings?.totalEarnings ?? 0}`, label: 'Lifetime' },
+            { value: formatJmd(earnings?.totalEarnings), label: 'Lifetime' },
             { value: `${earnings?.totalDeliveries ?? currentRider?.totalDeliveries ?? 0}`, label: 'Deliveries' },
             { value: `${rating} ★`, label: 'Rating' },
           ]}
@@ -278,22 +279,22 @@ export default function HomeScreen() {
         <StatGrid>
           <StatCard
             label="Pending payout"
-            value={`₹${pendingPayout}`}
+            value={formatJmd(pendingPayout)}
             hint={`${unpaidCount} unpaid`}
             icon="hourglass-outline"
             accent="primary"
           />
           <StatCard
             label="Paid out"
-            value={`₹${paidOut}`}
+            value={formatJmd(paidOut)}
             hint="Transferred"
             icon="checkmark-circle-outline"
             accent="partner"
           />
           <StatCard
-            label="Per delivery"
-            value={`₹${summary?.earningPerDelivery ?? RIDER_FEE}`}
-            hint="Completion fee"
+            label="Avg per delivery"
+            value={formatJmd(summary?.earningPerDelivery)}
+            hint="Delivery fee + tips"
             icon="bicycle-outline"
             accent="default"
           />
@@ -336,7 +337,8 @@ export default function HomeScreen() {
                     </View>
                   </View>
                   <ThemedText type="small" themeColor="textSecondary" style={{ marginTop: 6 }}>
-                    Tap to continue delivery · ₹{RIDER_FEE} on completion
+                    Tap to continue delivery · {formatJmd(riderEarningForOrder(activeOrderQ.data))} on
+                    completion
                   </ThemedText>
                 </>
               )}
@@ -404,7 +406,9 @@ export default function HomeScreen() {
                       : 'Restaurant'}
                   </ThemedText>
                 </View>
-                <ThemedText style={[styles.listAmount, { color: theme.partner }]}>+₹{RIDER_FEE}</ThemedText>
+                <ThemedText style={[styles.listAmount, { color: theme.partner }]}>
+                  +{formatJmd(riderEarningForOrder(o))}
+                </ThemedText>
               </View>
             ))
           )}

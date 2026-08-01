@@ -5,6 +5,8 @@ export type DeliveryOffer = {
   orderNumber: string;
   restaurantName: string;
   grandTotal: number;
+  /** Delivery fee + tip — what the rider actually earns for this trip */
+  riderEarning: number;
   expiresAt: number;
 };
 
@@ -23,6 +25,7 @@ export const useDeliveryOfferStore = create<DeliveryOfferState>((set, get) => ({
       orderNumber: input.orderNumber,
       restaurantName: input.restaurantName,
       grandTotal: input.grandTotal,
+      riderEarning: input.riderEarning ?? 0,
       expiresAt: Date.now() + timeoutSec * 1000,
     };
     const current = get().offer;

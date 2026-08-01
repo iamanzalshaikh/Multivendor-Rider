@@ -20,8 +20,9 @@ import {
   useWithdrawalRequestsQuery,
 } from '@/hooks/queries/rider';
 import { useTheme } from '@/hooks/use-theme';
+import { formatJmd, riderEarningForOrder } from '@/lib/money';
 import { orderDisplayId } from '@/lib/orderDisplay';
-import { requestWithdrawal, RIDER_FEE } from '@/services/riders';
+import { requestWithdrawal } from '@/services/riders';
 import type { RiderOrder } from '@/types/rider';
 
 function formatDate(value?: string) {
@@ -66,7 +67,14 @@ const DeliveryHistoryRow = memo(function DeliveryHistoryRow({
             : 'Delivery'}
         </ThemedText>
       </View>
-      <ThemedText style={[styles.historyEarn, { color: theme.partner }]}>+₹{RIDER_FEE}</ThemedText>
+      <View style={styles.historyRight}>
+        <ThemedText style={[styles.historyEarn, { color: theme.partner }]}>
+          +{formatJmd(riderEarningForOrder(item))}
+        </ThemedText>
+        <ThemedText type="small" themeColor="textSecondary">
+          {item.paymentMethod === 'COD' ? 'Cash' : 'Online'}
+        </ThemedText>
+      </View>
     </View>
   );
 });
@@ -107,7 +115,10 @@ export default function EarningsScreen() {
   const paidAmount = summary?.totalPaidOut?.grossEarnings ?? 0;
   const unpaidCount = summary?.pendingPayout?.deliveryCount ?? 0;
   const availableBalance = withdrawalsQ.data?.availableBalance ?? pendingAmount;
-  const perDelivery = summary?.earningPerDelivery ?? RIDER_FEE;
+  const perDelivery = summary?.earningPerDelivery ?? 0;
+  const cash = summary?.cash;
+  const online = summary?.online;
+  const awaiting = summary?.awaitingVerification;
   const refreshing =
     historyQ.isRefetching ||
     earningsQ.isRefetching ||
@@ -137,30 +148,30 @@ export default function EarningsScreen() {
             todayAmount={earnings?.todayEarnings ?? 0}
             icon="wallet"
             meta={[
-              { value: `₹${earnings?.totalEarnings ?? 0}`, label: 'All time' },
+              { value: formatJmd(earnings?.totalEarnings), label: 'All time' },
               { value: `${earnings?.totalDeliveries ?? 0}`, label: 'Trips' },
-              { value: `₹${perDelivery}`, label: 'Per trip' },
+              { value: formatJmd(perDelivery), label: 'Avg / trip' },
             ]}
           />
 
           <StatGrid>
             <StatCard
               label="Pending payout"
-              value={`₹${pendingAmount}`}
+              value={formatJmd(pendingAmount)}
               hint={`${unpaidCount} unpaid ${unpaidCount === 1 ? 'delivery' : 'deliveries'}`}
               icon="hourglass-outline"
               accent="primary"
             />
             <StatCard
               label="Paid out"
-              value={`₹${paidAmount}`}
+              value={formatJmd(paidAmount)}
               hint="Total transferred"
               icon="checkmark-circle-outline"
               accent="partner"
             />
             <StatCard
               label="Available"
-              value={`₹${availableBalance}`}
+              value={formatJmd(availableBalance)}
               hint="Ready to withdraw"
               icon="cash-outline"
               accent="partner"
@@ -174,6 +185,61 @@ export default function EarningsScreen() {
             />
           </StatGrid>
 
+          <SectionCard
+            title="How you were paid"
+            subtitle="Earnings count once the payment is settled">
+            <View style={styles.splitRow}>
+              <View style={styles.splitCol}>
+                <View style={styles.splitHead}>
+                  <Ionicons name="cash-outline" size={16} color={theme.primary} />
+                  <ThemedText style={styles.splitLabel}>Cash (COD)</ThemedText>
+                </View>
+                <ThemedText style={styles.splitValue}>{formatJmd(cash?.grossEarnings)}</ThemedText>
+                <ThemedText type="small" themeColor="textSecondary">
+                  {cash?.deliveryCount ?? 0} {cash?.deliveryCount === 1 ? 'trip' : 'trips'}
+                </ThemedText>
+              </View>
+              <View style={[styles.splitDivider, { backgroundColor: theme.border }]} />
+              <View style={styles.splitCol}>
+                <View style={styles.splitHead}>
+                  <Ionicons name="card-outline" size={16} color={theme.partner} />
+                  <ThemedText style={styles.splitLabel}>Online / bank</ThemedText>
+                </View>
+                <ThemedText style={styles.splitValue}>{formatJmd(online?.grossEarnings)}</ThemedText>
+                <ThemedText type="small" themeColor="textSecondary">
+                  {online?.deliveryCount ?? 0} {online?.deliveryCount === 1 ? 'trip' : 'trips'}
+                </ThemedText>
+              </View>
+            </View>
+
+            {summary?.breakdown ? (
+              <ThemedText type="small" themeColor="textSecondary" style={styles.splitFooter}>
+                {formatJmd(summary.breakdown.deliveryFees)} delivery fees ·{' '}
+                {formatJmd(summary.breakdown.tips)} tips
+              </ThemedText>
+            ) : null}
+
+            {cash?.cashToRemit ? (
+              <View style={[styles.noticeRow, { backgroundColor: theme.primarySoft }]}>
+                <Ionicons name="wallet-outline" size={16} color={theme.primary} />
+                <ThemedText type="small" style={{ color: theme.primary, flex: 1 }}>
+                  {formatJmd(cash.cashToRemit)} cash in hand to hand over at shift end
+                </ThemedText>
+              </View>
+            ) : null}
+
+            {awaiting?.grossEarnings ? (
+              <View style={[styles.noticeRow, { backgroundColor: 'rgba(245,158,11,0.12)' }]}>
+                <Ionicons name="time-outline" size={16} color={theme.warning} />
+                <ThemedText type="small" style={{ color: theme.warning, flex: 1 }}>
+                  {formatJmd(awaiting.grossEarnings)} from {awaiting.deliveryCount}{' '}
+                  {awaiting.deliveryCount === 1 ? 'delivery' : 'deliveries'} unlocks once the payment
+                  is verified
+                </ThemedText>
+              </View>
+            ) : null}
+          </SectionCard>
+
           {availableBalance > 0 ? (
             <Pressable
               style={[styles.withdrawBtn, { backgroundColor: theme.primary }]}
@@ -181,7 +247,7 @@ export default function EarningsScreen() {
               onPress={() => {
                 Alert.alert(
                   'Request withdrawal',
-                  `Withdraw ₹${availableBalance} to your bank account?`,
+                  `Withdraw ${formatJmd(availableBalance)} to your bank account?`,
                   [
                     { text: 'Cancel', style: 'cancel' },
                     { text: 'Request', onPress: () => withdrawMut.mutate(availableBalance) },
@@ -193,7 +259,9 @@ export default function EarningsScreen() {
               ) : (
                 <>
                   <Ionicons name="arrow-down-circle-outline" size={20} color="#fff" />
-                  <ThemedText style={styles.withdrawBtnText}>Request withdrawal · ₹{availableBalance}</ThemedText>
+                  <ThemedText style={styles.withdrawBtnText}>
+                    Request withdrawal · {formatJmd(availableBalance)}
+                  </ThemedText>
                 </>
               )}
             </Pressable>
@@ -243,7 +311,7 @@ export default function EarningsScreen() {
                     <Ionicons name="swap-horizontal-outline" size={18} color={theme.primary} />
                   </View>
                   <View style={styles.historyLeft}>
-                    <ThemedText style={styles.historyId}>₹{w.amount}</ThemedText>
+                    <ThemedText style={styles.historyId}>{formatJmd(w.amount)}</ThemedText>
                     <ThemedText type="small" style={{ color: statusColor(w.status, theme) }}>
                       {formatPayoutStatus(w.status)}
                     </ThemedText>
@@ -269,7 +337,9 @@ export default function EarningsScreen() {
                     <Ionicons name="cash-outline" size={18} color={theme.partner} />
                   </View>
                   <View style={styles.historyLeft}>
-                    <ThemedText style={styles.historyId}>₹{p.netPayable ?? p.amount ?? 0}</ThemedText>
+                    <ThemedText style={styles.historyId}>
+                      {formatJmd(p.netPayable ?? p.amount ?? 0)}
+                    </ThemedText>
                     <ThemedText type="small" style={{ color: statusColor(p.status, theme) }}>
                       {formatPayoutStatus(p.status)}
                     </ThemedText>
@@ -322,8 +392,25 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   historyLeft: { flex: 1, minWidth: 0 },
+  historyRight: { alignItems: 'flex-end' },
   historyId: { fontSize: 14, fontFamily: Fonts.bold },
   historyEarn: { fontSize: 15, fontFamily: Fonts.extraBold },
+  splitRow: { flexDirection: 'row', alignItems: 'stretch' },
+  splitCol: { flex: 1, gap: 2 },
+  splitHead: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  splitLabel: { fontSize: 12, fontFamily: Fonts.bold },
+  splitValue: { fontSize: 18, fontFamily: Fonts.extraBold },
+  splitDivider: { width: 1, marginHorizontal: Spacing.three },
+  splitFooter: { marginTop: Spacing.two },
+  noticeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.two,
+    marginTop: Spacing.two,
+    borderRadius: 12,
+    paddingHorizontal: Spacing.two,
+    paddingVertical: 10,
+  },
   empty: {
     padding: Spacing.five,
     alignItems: 'center',
