@@ -18,9 +18,14 @@ import { Layout } from '@/constants/layout';
 import { Fonts, Spacing } from '@/constants/theme';
 import { useRiderOrderCache } from '@/hooks/queries/rider';
 import { invalidateAfterDeliveryComplete, invalidateAfterOrderAction } from '@/lib/riderQueryInvalidation';
+import {
+  optimisticStatusForAction,
+  patchOrderStatusOptimistic,
+} from '@/lib/optimisticOrderStatus';
 import { useTabBarHeight } from '@/hooks/use-tab-bar-height';
 import { useRiderProfile } from '@/hooks/use-rider-profile';
 import { useTheme } from '@/hooks/use-theme';
+import { riderKeys } from '@/hooks/queries/keys';
 import {
   completeDelivery,
   markArrived,
@@ -53,6 +58,19 @@ export default function TripScreen() {
       }
       return completeDelivery(orderId);
     },
+    onMutate: async ({ orderId, action }) => {
+      const nextStatus = optimisticStatusForAction(action);
+      if (!nextStatus) return;
+      await qc.cancelQueries({ queryKey: riderKeys.order(orderId) });
+      const prev = patchOrderStatusOptimistic(qc, orderId, nextStatus);
+      return { prev, orderId };
+    },
+    onError: (e, _vars, ctx) => {
+      if (ctx?.prev && ctx.orderId) {
+        qc.setQueryData(riderKeys.order(ctx.orderId), ctx.prev);
+      }
+      Alert.alert('Action failed', e instanceof Error ? e.message : 'Try again');
+    },
     onSuccess: (_, { orderId, action }) => {
       if (action === 'complete') {
         invalidateAfterDeliveryComplete(qc, orderId);
@@ -60,7 +78,6 @@ export default function TripScreen() {
         invalidateAfterOrderAction(qc, orderId);
       }
     },
-    onError: (e) => Alert.alert('Action failed', e instanceof Error ? e.message : 'Try again'),
   });
 
   if (profileLoading && !rider) {

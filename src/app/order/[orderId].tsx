@@ -42,6 +42,10 @@ import {
   invalidateAfterOrderAction,
 } from '@/lib/riderQueryInvalidation';
 import {
+  optimisticStatusForAction,
+  patchOrderStatusOptimistic,
+} from '@/lib/optimisticOrderStatus';
+import {
   acceptOrder,
   completeDelivery,
   pickupOrder,
@@ -49,6 +53,7 @@ import {
   startDelivery,
 } from '@/services/riders';
 import { formatJmd, riderEarningForOrder } from '@/lib/money';
+import { riderKeys } from '@/hooks/queries/keys';
 
 function resolveOrderId(raw: string | string[] | undefined): string | undefined {
   if (!raw) return undefined;
@@ -97,6 +102,20 @@ export default function OrderDetailScreen() {
       if (action === 'complete') return completeDelivery(orderId);
       return rejectOrder(orderId);
     },
+    onMutate: async (action) => {
+      if (!orderId) return;
+      const nextStatus = optimisticStatusForAction(action);
+      if (!nextStatus) return;
+      await qc.cancelQueries({ queryKey: riderKeys.order(orderId) });
+      const prev = patchOrderStatusOptimistic(qc, orderId, nextStatus);
+      return { prev };
+    },
+    onError: (e, _action, ctx) => {
+      if (orderId && ctx?.prev) {
+        qc.setQueryData(riderKeys.order(orderId), ctx.prev);
+      }
+      Alert.alert('Failed', e instanceof Error ? e.message : 'Try again');
+    },
     onSuccess: (_, action) => {
       if (!orderId) return;
       if (action === 'complete') {
@@ -108,7 +127,6 @@ export default function OrderDetailScreen() {
         router.replace('/(tabs)/orders');
       }
     },
-    onError: (e) => Alert.alert('Failed', e instanceof Error ? e.message : 'Try again'),
   });
 
   if (!orderId) {
