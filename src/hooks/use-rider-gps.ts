@@ -53,9 +53,9 @@ export function useRiderGps(enabled = true): RiderGpsCoord {
 
       positionSub = await Location.watchPositionAsync(
         {
-          accuracy: Location.Accuracy.High,
-          distanceInterval: 4,
-          timeInterval: 2_000,
+          accuracy: Location.Accuracy.Balanced,
+          distanceInterval: 8,
+          timeInterval: 3_000,
         },
         (loc) => {
           if (!alive) return;

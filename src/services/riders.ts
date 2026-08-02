@@ -284,7 +284,7 @@ export async function fetchDeliveryHistory(page = 1, limit = 20) {
 
 export async function fetchOrderById(orderId: string) {
   const body = await apiFetch<ApiEnvelope<{ order: RiderOrder }>>(`/orders/${orderId}`);
-  return body.data!.order;
+  return asRiderOrder(body.data?.order, orderId);
 }
 
 export async function fetchOrderRoute(orderId: string) {

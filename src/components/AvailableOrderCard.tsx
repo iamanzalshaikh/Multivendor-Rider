@@ -60,105 +60,80 @@ export const AvailableOrderCard = memo(function AvailableOrderCard({ order, busy
           <ThemedText type="link" style={styles.viewText}>
             Details
           </ThemedText>
-          <Ionicons name="chevron-forward" size={14} color={theme.primary} />
+          <Ionicons name="chevron-forward" size={12} color={theme.primary} />
         </Pressable>
       </View>
 
-      <View style={[styles.routeRow, { backgroundColor: theme.background }]}>
-        <View style={styles.routePoint}>
-          <View style={[styles.dot, { backgroundColor: theme.primary }]} />
-          <View style={styles.routeText}>
-            <ThemedText type="label" themeColor="textSecondary">
-              Pickup
-            </ThemedText>
-            <ThemedText style={styles.routeName} numberOfLines={1}>
-              {restaurant}
-            </ThemedText>
-            <ThemedText type="small" themeColor="textSecondary" numberOfLines={1}>
-              {formatRestaurantAddress(order)}
-            </ThemedText>
-          </View>
+      <View style={styles.routeCompact}>
+        <View style={styles.routeLine}>
+          <Ionicons name="storefront-outline" size={14} color={theme.primary} />
+          <ThemedText style={styles.routeName} numberOfLines={1}>
+            {restaurant}
+          </ThemedText>
         </View>
-        <View style={[styles.routeLine, { backgroundColor: theme.border }]} />
-        <View style={styles.routePoint}>
-          <View style={[styles.dot, { backgroundColor: theme.partner }]} />
-          <View style={styles.routeText}>
-            <ThemedText type="label" themeColor="textSecondary">
-              Drop
-            </ThemedText>
-            <ThemedText type="small" themeColor="textSecondary" numberOfLines={2}>
-              {formatDeliveryAddress(order)}
-            </ThemedText>
-          </View>
+        <ThemedText type="small" themeColor="textSecondary" numberOfLines={1} style={styles.routeAddr}>
+          {formatRestaurantAddress(order)}
+        </ThemedText>
+        <View style={[styles.routeLine, { marginTop: 4 }]}>
+          <Ionicons name="location-outline" size={14} color={theme.partner} />
+          <ThemedText type="small" themeColor="textSecondary" numberOfLines={1} style={styles.routeDrop}>
+            {formatDeliveryAddress(order)}
+          </ThemedText>
         </View>
       </View>
 
-      <View style={[styles.meta, { borderTopColor: theme.border }]}>
-        <View style={styles.metaCell}>
-          <ThemedText type="label" themeColor="textSecondary">
-            Order
-          </ThemedText>
-          <ThemedText style={styles.metaVal}>{formatJmd(order.grandTotal)}</ThemedText>
-        </View>
-        <View style={styles.metaCell}>
-          <ThemedText type="label" themeColor="textSecondary">
-            Items
-          </ThemedText>
-          <ThemedText style={styles.metaVal}>{items || '—'}</ThemedText>
-        </View>
-        <View style={styles.metaCell}>
-          <ThemedText type="label" themeColor="textSecondary">
-            Payment
-          </ThemedText>
-          <ThemedText style={styles.metaVal}>{order.paymentMethod === 'COD' ? 'COD' : 'Online'}</ThemedText>
-        </View>
+      <View style={[styles.footerRow, { borderTopColor: theme.border }]}>
+        <ThemedText type="small" themeColor="textSecondary" style={styles.metaLine}>
+          {formatJmd(order.grandTotal)} · {items || '—'} items ·{' '}
+          {order.paymentMethod === 'COD' ? 'COD' : 'Online'}
+        </ThemedText>
+        <Pressable
+          onPress={onAccept}
+          disabled={busy}
+          style={[styles.acceptBtn, { backgroundColor: theme.partner, opacity: busy ? 0.7 : 1 }]}>
+          <ThemedText style={styles.acceptText}>Accept</ThemedText>
+        </Pressable>
       </View>
-
-      <Pressable
-        onPress={onAccept}
-        disabled={busy}
-        style={[styles.acceptBtn, { backgroundColor: theme.partner, opacity: busy ? 0.7 : 1 }]}>
-        <ThemedText style={styles.acceptText}>Accept delivery</ThemedText>
-    </Pressable>
-  </View>
+    </View>
   );
 });
 
 const styles = StyleSheet.create({
-  card: { padding: Spacing.three, marginBottom: Spacing.two },
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
-  headerLeft: { flex: 1 },
-  orderId: { fontSize: 17, fontFamily: Fonts.extraBold },
-  earnBadge: { fontSize: 13, fontFamily: Fonts.medium, marginTop: 4 },
+  card: { padding: Spacing.two + 2, marginBottom: Spacing.two },
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  headerLeft: { flex: 1, minWidth: 0, paddingRight: Spacing.two },
+  orderId: { fontSize: 15, fontFamily: Fonts.extraBold },
+  earnBadge: { fontSize: 12, fontFamily: Fonts.medium, marginTop: 2 },
   viewBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 2,
     borderWidth: 1,
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
   },
-  viewText: { fontSize: 12 },
-  routeRow: { marginTop: Spacing.three, borderRadius: Layout.inputRadius, padding: Spacing.two },
-  routePoint: { flexDirection: 'row', gap: Spacing.two, alignItems: 'flex-start' },
-  dot: { width: 10, height: 10, borderRadius: 5, marginTop: 4 },
-  routeText: { flex: 1, minWidth: 0 },
-  routeName: { fontSize: 14, fontFamily: Fonts.bold, marginTop: 2 },
-  routeLine: { width: 2, height: 16, marginLeft: 4, marginVertical: 4 },
-  meta: {
+  viewText: { fontSize: 11 },
+  routeCompact: { marginTop: Spacing.two },
+  routeLine: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  routeName: { flex: 1, fontSize: 13, fontFamily: Fonts.bold },
+  routeAddr: { marginLeft: 20, marginTop: 1 },
+  routeDrop: { flex: 1 },
+  footerRow: {
     flexDirection: 'row',
-    marginTop: Spacing.three,
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: Spacing.two,
+    marginTop: Spacing.two,
     paddingTop: Spacing.two,
-    borderTopWidth: 1,
+    borderTopWidth: StyleSheet.hairlineWidth,
   },
-  metaCell: { flex: 1 },
-  metaVal: { fontSize: 14, fontFamily: Fonts.extraBold, marginTop: 2 },
+  metaLine: { flex: 1, minWidth: 0 },
   acceptBtn: {
-    marginTop: Spacing.three,
     borderRadius: Layout.buttonRadius,
-    paddingVertical: 14,
+    paddingVertical: 8,
+    paddingHorizontal: 14,
     alignItems: 'center',
   },
-  acceptText: { color: '#fff', fontFamily: Fonts.extraBold, fontSize: 15 },
+  acceptText: { color: '#fff', fontFamily: Fonts.extraBold, fontSize: 13 },
 });

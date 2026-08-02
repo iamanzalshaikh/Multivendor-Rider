@@ -21,7 +21,7 @@ import { queryClient } from '@/lib/queryClient';
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
-const SPLASH_FALLBACK_MS = 2500;
+const SPLASH_FALLBACK_MS = 800;
 
 export default function RootLayout() {
   const [fontsLoaded, fontError] = useFonts({
@@ -78,6 +78,8 @@ export default function RootLayout() {
           <Stack
             screenOptions={{
               headerShown: false,
+              animation: 'fade',
+              animationDuration: 120,
               contentStyle: { backgroundColor: Brand.surface },
             }}
           />

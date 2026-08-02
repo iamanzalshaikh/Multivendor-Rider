@@ -11,8 +11,8 @@ export function useUnreadNotificationCount(enabled = true) {
       return notifications.filter((n) => !n.isRead).length;
     },
     enabled,
-    refetchInterval: 60_000,
-    staleTime: 45_000,
+    refetchInterval: 90_000,
+    staleTime: 60_000,
     gcTime: 5 * 60 * 1000,
     refetchOnMount: false,
   });

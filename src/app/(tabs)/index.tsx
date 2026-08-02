@@ -1,6 +1,6 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
-import { memo, useCallback, useEffect, useState } from 'react';
+import { memo, useCallback, useEffect } from 'react';
 import {
   View,
   StyleSheet,
@@ -84,12 +84,6 @@ export default function HomeScreen() {
   const rider = useRiderStore((s) => s.rider);
   const setRider = useRiderStore((s) => s.setRider);
   const unreadCount = useUnreadNotificationCount();
-  const [loadHistory, setLoadHistory] = useState(false);
-
-  useEffect(() => {
-    const timer = setTimeout(() => setLoadHistory(true), 400);
-    return () => clearTimeout(timer);
-  }, []);
 
   const {
     rider: profileRider,
@@ -101,7 +95,7 @@ export default function HomeScreen() {
 
   const earningsQ = useRiderEarningsQuery();
   const summaryQ = useEarningsSummaryQuery();
-  const historyQ = useDeliveryHistoryQuery(1, 5, loadHistory);
+  const historyQ = useDeliveryHistoryQuery(1, 5, true);
 
   const currentRider = profileRider ?? rider;
   const profileImage = user?.profileImage ?? profileRider?.profileImage;
@@ -387,8 +381,10 @@ export default function HomeScreen() {
             </ThemedText>
           ) : (
             (historyQ.data?.orders ?? []).map((o, i, arr) => (
-              <View
+              <Pressable
                 key={o._id}
+                onPressIn={() => prefetchRiderOrder(qc, o._id)}
+                onPress={() => router.push(`/order/${o._id}` as never)}
                 style={[
                   styles.listRow,
                   i < arr.length - 1 && { borderBottomWidth: 1, borderBottomColor: theme.border },
@@ -409,7 +405,8 @@ export default function HomeScreen() {
                 <ThemedText style={[styles.listAmount, { color: theme.partner }]}>
                   +{formatJmd(riderEarningForOrder(o))}
                 </ThemedText>
-              </View>
+                <Ionicons name="chevron-forward" size={16} color={theme.textSecondary} />
+              </Pressable>
             ))
           )}
         </SectionCard>

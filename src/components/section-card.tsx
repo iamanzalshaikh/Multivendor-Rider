@@ -54,6 +54,7 @@ const styles = StyleSheet.create({
   },
   body: {
     overflow: 'hidden',
+    padding: Spacing.three,
   },
   bodyFlush: {
     padding: 0,

@@ -1,7 +1,7 @@
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { View, StyleSheet, RefreshControl, ActivityIndicator, Alert, Pressable, FlatList, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useFocusEffect } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { memo, useCallback, useState } from 'react';
 
 import { EarningsHeroCard } from '@/components/EarningsHeroCard';
@@ -13,6 +13,7 @@ import { ThemedText } from '@/components/themed-text';
 import { Layout } from '@/constants/layout';
 import { Fonts, Spacing } from '@/constants/theme';
 import {
+  prefetchRiderOrder,
   useDeliveryHistoryQuery,
   useEarningsSummaryQuery,
   usePayoutHistoryQuery,
@@ -45,13 +46,19 @@ const DeliveryHistoryRow = memo(function DeliveryHistoryRow({
   item,
   isLast,
   theme,
+  onPress,
+  onPressIn,
 }: {
   item: RiderOrder;
   isLast: boolean;
   theme: ReturnType<typeof useTheme>;
+  onPress: () => void;
+  onPressIn: () => void;
 }) {
   return (
-    <View
+    <Pressable
+      onPressIn={onPressIn}
+      onPress={onPress}
       style={[
         styles.historyRow,
         !isLast && { borderBottomWidth: 1, borderBottomColor: theme.border },
@@ -75,13 +82,16 @@ const DeliveryHistoryRow = memo(function DeliveryHistoryRow({
           {item.paymentMethod === 'COD' ? 'Cash' : 'Online'}
         </ThemedText>
       </View>
-    </View>
+      <Ionicons name="chevron-forward" size={16} color={theme.textSecondary} />
+    </Pressable>
   );
 });
 
 export default function EarningsScreen() {
   const theme = useTheme();
-  const [focused, setFocused] = useState(false);
+  const router = useRouter();
+  const qc = useQueryClient();
+  const [focused, setFocused] = useState(true);
 
   useFocusEffect(
     useCallback(() => {
@@ -284,6 +294,8 @@ export default function EarningsScreen() {
                     item={item}
                     isLast={index === history.length - 1}
                     theme={theme}
+                    onPressIn={() => prefetchRiderOrder(qc, item._id)}
+                    onPress={() => router.push(`/order/${item._id}` as never)}
                   />
                 )}
               />
@@ -396,12 +408,12 @@ const styles = StyleSheet.create({
   historyId: { fontSize: 14, fontFamily: Fonts.bold },
   historyEarn: { fontSize: 15, fontFamily: Fonts.extraBold },
   splitRow: { flexDirection: 'row', alignItems: 'stretch' },
-  splitCol: { flex: 1, gap: 2 },
+  splitCol: { flex: 1, gap: 4 },
   splitHead: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   splitLabel: { fontSize: 12, fontFamily: Fonts.bold },
-  splitValue: { fontSize: 18, fontFamily: Fonts.extraBold },
-  splitDivider: { width: 1, marginHorizontal: Spacing.three },
-  splitFooter: { marginTop: Spacing.two },
+  splitValue: { fontSize: 18, fontFamily: Fonts.extraBold, marginTop: 2 },
+  splitDivider: { width: 1, marginHorizontal: Spacing.two },
+  splitFooter: { marginTop: Spacing.three },
   noticeRow: {
     flexDirection: 'row',
     alignItems: 'center',

@@ -8,7 +8,7 @@ import { getAccessToken, getRefreshToken } from '@/lib/storage';
 import { fetchRiderProfile } from '@/services/riders';
 import { useRiderStore } from '@/stores/riderStore';
 
-const BOOT_TIMEOUT_MS = 5000;
+const BOOT_TIMEOUT_MS = 2500;
 
 async function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
   let timeoutId: ReturnType<typeof setTimeout> | undefined;
@@ -21,6 +21,14 @@ async function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
   } finally {
     if (timeoutId) clearTimeout(timeoutId);
   }
+}
+
+function warmProfile() {
+  void fetchRiderProfile()
+    .then((profile) => useRiderStore.getState().setRider(profile))
+    .catch(() => {
+      // Tabs layout refetches profile
+    });
 }
 
 export default function Index() {
@@ -37,21 +45,19 @@ export default function Index() {
       try {
         let token = await withTimeout(getAccessToken(), BOOT_TIMEOUT_MS);
         if (!token) {
-          const refresh = await withTimeout(getRefreshToken(), BOOT_TIMEOUT_MS);
+          const refresh = await withTimeout(getRefreshToken(), 1500);
           if (refresh) token = await withTimeout(refreshAccessToken(), BOOT_TIMEOUT_MS);
         }
         if (!alive) return;
         clearTimeout(fallback);
+
         if (token) {
-          try {
-            const profile = await withTimeout(fetchRiderProfile(), BOOT_TIMEOUT_MS);
-            if (alive) useRiderStore.getState().setRider(profile);
-          } catch {
-            // Tabs will refetch profile
-          }
+          // Enter tabs immediately — profile warms in the background.
+          setTarget('tabs');
+          warmProfile();
+          return;
         }
-        if (!alive) return;
-        setTarget(token ? 'tabs' : 'auth');
+        setTarget('auth');
       } catch {
         if (!alive) return;
         clearTimeout(fallback);

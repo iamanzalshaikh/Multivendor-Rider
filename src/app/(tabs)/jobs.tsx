@@ -123,11 +123,16 @@ export default function JobsScreen() {
         keyExtractor={(item) => item._id}
         renderItem={renderJob}
         style={styles.flex1}
-        contentContainerStyle={available.length ? styles.list : styles.listEmpty}
-        initialNumToRender={4}
-        maxToRenderPerBatch={6}
-        windowSize={5}
+        contentContainerStyle={
+          available.length
+            ? [styles.list, { paddingBottom: tabBarHeight + Spacing.four }]
+            : [styles.listEmpty, { paddingBottom: tabBarHeight }]
+        }
+        initialNumToRender={6}
+        maxToRenderPerBatch={8}
+        windowSize={7}
         removeClippedSubviews={Platform.OS === 'android'}
+        keyboardShouldPersistTaps="handled"
         refreshControl={
           <RefreshControl refreshing={availableQ.isRefetching} onRefresh={() => availableQ.refetch()} />
         }
@@ -154,7 +159,7 @@ export default function JobsScreen() {
 const styles = StyleSheet.create({
   root: { flex: 1 },
   flex1: { flex: 1 },
-  list: { paddingHorizontal: Layout.screenPadding, paddingBottom: Spacing.four },
+  list: { paddingHorizontal: Layout.screenPadding, paddingTop: Spacing.two },
   listEmpty: { flexGrow: 1 },
   center: {
     flex: 1,

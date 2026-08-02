@@ -117,11 +117,17 @@ async function secureDelete(key: string): Promise<void> {
 }
 
 export async function getAccessToken(): Promise<string | null> {
-  return secureGet(ACCESS_TOKEN_KEY);
+  if (memory[ACCESS_TOKEN_KEY]) return memory[ACCESS_TOKEN_KEY]!;
+  const value = await secureGet(ACCESS_TOKEN_KEY);
+  if (value) memory[ACCESS_TOKEN_KEY] = value;
+  return value;
 }
 
 export async function getRefreshToken(): Promise<string | null> {
-  return secureGet(REFRESH_TOKEN_KEY);
+  if (memory[REFRESH_TOKEN_KEY]) return memory[REFRESH_TOKEN_KEY]!;
+  const value = await secureGet(REFRESH_TOKEN_KEY);
+  if (value) memory[REFRESH_TOKEN_KEY] = value;
+  return value;
 }
 
 export async function setTokens(input: {

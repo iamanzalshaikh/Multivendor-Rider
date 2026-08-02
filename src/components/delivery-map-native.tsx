@@ -151,7 +151,7 @@ export function DeliveryMapNative({
     if (!mapRef.current || !canControlCamera || fitTargets.length === 0) return;
     mapRef.current.fitToCoordinates(fitTargets, {
       edgePadding: { top: fullScreen ? 120 : 56, right: 56, bottom: fullScreen ? 160 : 56, left: 56 },
-      animated: true,
+      animated: false,
     });
     setUserPanned(false);
     setNavigating(false);
@@ -161,19 +161,19 @@ export function DeliveryMapNative({
     if (!mapRef.current || !canControlCamera || !isValidCoord(rider)) return;
 
     const now = Date.now();
-    if (now - lastCameraMs.current < 800) return;
+    if (now - lastCameraMs.current < 450) return;
     lastCameraMs.current = now;
 
     const heading = resolveNavigationHeading(rider, lineCoords, destination, riderHeading);
 
     if (Platform.OS === 'android') {
-      mapRef.current.animateCamera({ center: rider, heading, zoom: NAV_ZOOM }, { duration: 350 });
+      mapRef.current.animateCamera({ center: rider, heading, zoom: NAV_ZOOM }, { duration: 180 });
       return;
     }
 
     mapRef.current.animateCamera(
       { center: rider, heading, pitch: NAV_PITCH, zoom: NAV_ZOOM },
-      { duration: 350 },
+      { duration: 180 },
     );
   }, [rider, lineCoords, destination, riderHeading, canControlCamera]);
 
@@ -187,12 +187,8 @@ export function DeliveryMapNative({
     if (!canControlCamera || fitTargets.length === 0) return;
     if (fitKey === lastFitKey.current) return;
 
-    const timer = setTimeout(() => {
-      fitOverview();
-      lastFitKey.current = fitKey;
-    }, 400);
-
-    return () => clearTimeout(timer);
+    lastFitKey.current = fitKey;
+    fitOverview();
   }, [canControlCamera, fitKey, fitTargets.length, fitOverview]);
 
   useEffect(() => {

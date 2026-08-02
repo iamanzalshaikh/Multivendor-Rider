@@ -32,15 +32,15 @@ async function fetchRoadRoute(input: {
   const prePickup = ['RIDER_ASSIGNED', 'READY_FOR_PICKUP'].includes(orderStatus ?? '');
   const endpoints = resolveRouteEndpoints({ orderStatus, restaurant, customer, rider });
 
-  // 1) Backend: Google Routes API → OSRM fallback
-  const apiPath = await fetchOrderRoute(orderId).catch(() => [] as RoutePoint[]);
+  // Backend + client OSRM in parallel — first usable road path wins.
+  const [apiPath, osrmActive] = await Promise.all([
+    fetchOrderRoute(orderId).catch(() => [] as RoutePoint[]),
+    endpoints ? fetchOsrmRoute(endpoints).catch(() => [] as RoutePoint[]) : Promise.resolve([] as RoutePoint[]),
+  ]);
   if (isRoutedPath(apiPath)) return apiPath;
-
-  // 2) Client OSRM for active leg
-  const osrmActive = endpoints ? await fetchOsrmRoute(endpoints).catch(() => [] as RoutePoint[]) : [];
   if (isRoutedPath(osrmActive)) return osrmActive;
 
-  // 3) Before pickup: merge rider→restaurant + restaurant→customer roads
+  // Before pickup: merge rider→restaurant + restaurant→customer roads
   if (prePickup && isValidRoutePoint(rider) && isValidRoutePoint(restaurant) && isValidRoutePoint(customer)) {
     const [toPickup, pickupToDrop] = await Promise.all([
       fetchOsrmRoute({ origin: rider!, destination: restaurant! }).catch(() => [] as RoutePoint[]),
