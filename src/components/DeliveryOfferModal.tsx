@@ -57,7 +57,7 @@ export function DeliveryOfferModal() {
     };
 
     tick();
-    const id = setInterval(tick, 250);
+    const id = setInterval(tick, 1000);
     return () => clearInterval(id);
   }, [offer, hasActiveOrder, clearOffer]);
 
@@ -66,7 +66,7 @@ export function DeliveryOfferModal() {
   if (!visible || !offer) return null;
 
   return (
-    <Modal visible transparent animationType="slide" onRequestClose={() => clearOffer(offer.orderId)}>
+    <Modal visible transparent animationType="fade" onRequestClose={() => clearOffer(offer.orderId)}>
       <View style={styles.overlay}>
         <View style={[styles.sheet, cardStyle, { backgroundColor: theme.backgroundElement }]}>
           <View style={[styles.badge, { backgroundColor: theme.primary }]}>
