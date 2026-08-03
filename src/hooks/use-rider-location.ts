@@ -1,11 +1,15 @@
 import { useEffect } from 'react';
 import * as Location from 'expo-location';
-import * as TaskManager from 'expo-task-manager';
 
-import { RIDER_LOCATION_TASK } from '@/tasks/riderLocationTask';
+import {
+  ensureRiderLocationTaskRegistered,
+  RIDER_LOCATION_TASK,
+} from '@/tasks/riderLocationTask';
 
 async function safeStopBackgroundLocation(): Promise<void> {
   try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const TaskManager = require('expo-task-manager') as typeof import('expo-task-manager');
     if (!TaskManager.isTaskDefined(RIDER_LOCATION_TASK)) return;
     const started = await Location.hasStartedLocationUpdatesAsync(RIDER_LOCATION_TASK);
     if (started) await Location.stopLocationUpdatesAsync(RIDER_LOCATION_TASK);
@@ -24,10 +28,15 @@ export function useRiderLocationTracking(enabled: boolean) {
         return;
       }
 
+      ensureRiderLocationTaskRegistered();
+
       const { status: fgStatus } = await Location.requestForegroundPermissionsAsync();
       if (fgStatus !== 'granted' || !alive) return;
 
       await Location.requestBackgroundPermissionsAsync();
+      if (!alive) return;
+
+      ensureRiderLocationTaskRegistered();
 
       const started = await Location.hasStartedLocationUpdatesAsync(RIDER_LOCATION_TASK);
       if (started || !alive) return;
