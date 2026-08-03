@@ -2,8 +2,8 @@ import 'react-native-gesture-handler';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 import { DefaultTheme, ThemeProvider, Stack } from 'expo-router';
-import { useCallback, useEffect, useState } from 'react';
-import { StyleSheet } from 'react-native';
+import { useEffect } from 'react';
+import { StyleSheet, View, useColorScheme } from 'react-native';
 import { useFonts } from 'expo-font';
 import * as SplashScreen from 'expo-splash-screen';
 import { QueryClientProvider } from '@tanstack/react-query';
@@ -16,16 +16,14 @@ import {
   PlusJakartaSans_800ExtraBold,
 } from '@expo-google-fonts/plus-jakarta-sans';
 
-import '@/tasks/riderLocationTask';
 import { Brand } from '@/constants/theme';
 import { queryClient } from '@/lib/queryClient';
-import AppSplash from './splash';
+import { ensureRiderLocationTaskRegistered } from '@/tasks/riderLocationTask';
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
-const SPLASH_FALLBACK_MS = 800;
-
 export default function RootLayout() {
+  const scheme = useColorScheme();
   const [fontsLoaded, fontError] = useFonts({
     PlusJakartaSans_400Regular,
     PlusJakartaSans_500Medium,
@@ -33,42 +31,24 @@ export default function RootLayout() {
     PlusJakartaSans_700Bold,
     PlusJakartaSans_800ExtraBold,
   });
-  const [nativeSplashHidden, setNativeSplashHidden] = useState(false);
-
-  const hideNativeSplash = useCallback(async () => {
-    try {
-      await SplashScreen.hideAsync();
-    } catch {
-      try {
-        await SplashScreen.hideAsync();
-      } catch {
-        // ignore
-      }
-    } finally {
-      setNativeSplashHidden(true);
-    }
-  }, []);
-
-  useEffect(() => {
-    if (fontsLoaded || fontError) {
-      void hideNativeSplash();
-    }
-  }, [fontsLoaded, fontError, hideNativeSplash]);
-
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      void hideNativeSplash();
-    }, SPLASH_FALLBACK_MS);
-    return () => clearTimeout(timer);
-  }, [hideNativeSplash]);
 
   const fontsReady = fontsLoaded || Boolean(fontError);
 
-  // Paint our branded splash immediately — never a blank/white frame.
-  if (!nativeSplashHidden || !fontsReady) {
+  useEffect(() => {
+    ensureRiderLocationTaskRegistered();
+  }, []);
+
+  useEffect(() => {
+    if (fontsReady) {
+      SplashScreen.hideAsync().catch(() => {});
+    }
+  }, [fontsReady]);
+
+  // Blank frame only while fonts load — branded splash lives in index (once).
+  if (!fontsReady) {
     return (
       <GestureHandlerRootView style={styles.root}>
-        <AppSplash />
+        <View style={[styles.root, { backgroundColor: scheme === 'dark' ? '#000000' : '#FFFFFF' }]} />
       </GestureHandlerRootView>
     );
   }
