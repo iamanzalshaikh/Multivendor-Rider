@@ -17,7 +17,7 @@ export default function PendingApprovalScreen() {
     <View style={[styles.root, { backgroundColor: theme.background }]}>
       <StatusBar style="light" />
       <View style={styles.hero}>
-        <ThemedText style={styles.heroBadge}>QuickBite Partner</ThemedText>
+        <ThemedText style={styles.heroBadge}>SD Services Partner</ThemedText>
         <ThemedText style={styles.heroTitle}>Application submitted</ThemedText>
       </View>
 

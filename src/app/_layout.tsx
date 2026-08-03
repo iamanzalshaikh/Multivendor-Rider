@@ -1,8 +1,9 @@
 import 'react-native-gesture-handler';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 import { DefaultTheme, ThemeProvider, Stack } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, View } from 'react-native';
+import { StyleSheet } from 'react-native';
 import { useFonts } from 'expo-font';
 import * as SplashScreen from 'expo-splash-screen';
 import { QueryClientProvider } from '@tanstack/react-query';
@@ -18,6 +19,7 @@ import {
 import '@/tasks/riderLocationTask';
 import { Brand } from '@/constants/theme';
 import { queryClient } from '@/lib/queryClient';
+import AppSplash from './splash';
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
@@ -31,60 +33,66 @@ export default function RootLayout() {
     PlusJakartaSans_700Bold,
     PlusJakartaSans_800ExtraBold,
   });
-  const [splashHidden, setSplashHidden] = useState(false);
+  const [nativeSplashHidden, setNativeSplashHidden] = useState(false);
 
-  const hideSplash = useCallback(async () => {
+  const hideNativeSplash = useCallback(async () => {
     try {
       await SplashScreen.hideAsync();
     } catch {
-      // Retry once — dev client sometimes rejects the first hide call.
       try {
         await SplashScreen.hideAsync();
       } catch {
         // ignore
       }
     } finally {
-      setSplashHidden(true);
+      setNativeSplashHidden(true);
     }
   }, []);
 
   useEffect(() => {
     if (fontsLoaded || fontError) {
-      void hideSplash();
+      void hideNativeSplash();
     }
-  }, [fontsLoaded, fontError, hideSplash]);
+  }, [fontsLoaded, fontError, hideNativeSplash]);
 
   useEffect(() => {
     const timer = setTimeout(() => {
-      void hideSplash();
+      void hideNativeSplash();
     }, SPLASH_FALLBACK_MS);
     return () => clearTimeout(timer);
-  }, [hideSplash]);
+  }, [hideNativeSplash]);
 
-  const ready = splashHidden || fontsLoaded || Boolean(fontError);
+  const fontsReady = fontsLoaded || Boolean(fontError);
 
-  if (!ready) {
+  // Paint our branded splash immediately — never a blank/white frame.
+  if (!nativeSplashHidden || !fontsReady) {
     return (
-      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: Brand.orange }}>
-        <ActivityIndicator size="large" color="#ffffff" />
-      </View>
+      <GestureHandlerRootView style={styles.root}>
+        <AppSplash />
+      </GestureHandlerRootView>
     );
   }
 
   return (
-    <SafeAreaProvider>
-      <QueryClientProvider client={queryClient}>
-        <ThemeProvider value={DefaultTheme}>
-          <Stack
-            screenOptions={{
-              headerShown: false,
-              animation: 'fade',
-              animationDuration: 120,
-              contentStyle: { backgroundColor: Brand.surface },
-            }}
-          />
-        </ThemeProvider>
-      </QueryClientProvider>
-    </SafeAreaProvider>
+    <GestureHandlerRootView style={styles.root}>
+      <SafeAreaProvider>
+        <QueryClientProvider client={queryClient}>
+          <ThemeProvider value={DefaultTheme}>
+            <Stack
+              screenOptions={{
+                headerShown: false,
+                animation: 'fade',
+                animationDuration: 180,
+                contentStyle: { backgroundColor: Brand.surface },
+              }}
+            />
+          </ThemeProvider>
+        </QueryClientProvider>
+      </SafeAreaProvider>
+    </GestureHandlerRootView>
   );
 }
+
+const styles = StyleSheet.create({
+  root: { flex: 1 },
+});

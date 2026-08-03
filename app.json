@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "QuickBite Rider",
+    "name": "SD Services Rider",
     "slug": "riderApp",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -70,8 +70,8 @@
       [
         "expo-location",
         {
-          "locationWhenInUsePermission": "QuickBite Rider uses your location for delivery tracking and order assignment.",
-          "locationAlwaysAndWhenInUsePermission": "QuickBite Rider uses your location while delivering, including in the background.",
+          "locationWhenInUsePermission": "SD Services Rider uses your location for delivery tracking and order assignment.",
+          "locationAlwaysAndWhenInUsePermission": "SD Services Rider uses your location while delivering, including in the background.",
           "isAndroidForegroundServiceEnabled": true
         }
       ],
@@ -85,8 +85,8 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "QuickBite Rider needs photo access to upload KYC documents.",
-          "cameraPermission": "QuickBite Rider needs camera access to capture KYC documents."
+          "photosPermission": "SD Services Rider needs photo access to upload KYC documents.",
+          "cameraPermission": "SD Services Rider needs camera access to capture KYC documents."
         }
       ],
       [

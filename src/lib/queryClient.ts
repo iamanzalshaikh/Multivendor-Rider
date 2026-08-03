@@ -8,11 +8,11 @@ export const queryClient = new QueryClient({
       gcTime: 10 * 60_000,
       refetchOnWindowFocus: false,
       refetchOnMount: false,
-      networkMode: 'online',
+      networkMode: 'always',
     },
     mutations: {
       retry: 0,
-      networkMode: 'online',
+      networkMode: 'always',
     },
   },
 });

@@ -181,7 +181,7 @@ export default function RegisterScreen() {
         automaticallyAdjustKeyboardInsets={Platform.OS === 'ios'}>
         {!keyboardOpen ? (
           <View style={styles.hero}>
-            <ThemedText style={styles.heroBadge}>QuickBite Partner</ThemedText>
+            <ThemedText style={styles.heroBadge}>SD Services Partner</ThemedText>
             <ThemedText style={styles.heroTitle}>Join as rider</ThemedText>
             <ThemedText style={styles.heroSub}>
               Step {step} of {totalSteps} - Complete onboarding

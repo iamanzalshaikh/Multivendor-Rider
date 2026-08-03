@@ -1,4 +1,4 @@
-import { View, StyleSheet, Pressable, ActivityIndicator, Alert, Image } from 'react-native';
+import { View, StyleSheet, Pressable, Alert, Image } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -6,6 +6,7 @@ import { ScreenHeader } from '@/components/screen-header';
 import { TabScrollView } from '@/components/tab-scroll-view';
 import { ThemedText } from '@/components/themed-text';
 import { VerificationBanner } from '@/components/verification-banner';
+import { RiderProfileSkeleton } from '@/components/skeleton';
 import { cardStyle, Layout } from '@/constants/layout';
 import { Fonts, Spacing } from '@/constants/theme';
 import { useRiderProfile } from '@/hooks/use-rider-profile';
@@ -107,7 +108,7 @@ export default function ProfileScreen() {
       />
 
       {isLoading && !data ? (
-        <ActivityIndicator color={theme.primary} style={{ marginTop: Spacing.four }} />
+        <RiderProfileSkeleton />
       ) : (
         <>
           <View style={styles.content}>

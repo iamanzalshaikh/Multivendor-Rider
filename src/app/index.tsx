@@ -1,14 +1,20 @@
-import { Redirect } from 'expo-router';
+import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 
-import { Brand } from '@/constants/theme';
+import SplashScreen, { SPLASH_MIN_MS } from './splash';
 import { refreshAccessToken } from '@/lib/tokenRefresh';
 import { getAccessToken, getRefreshToken } from '@/lib/storage';
 import { fetchRiderProfile } from '@/services/riders';
 import { useRiderStore } from '@/stores/riderStore';
 
 const BOOT_TIMEOUT_MS = 2500;
+/** Keep splash painted while the destination screen mounts (avoids white flash). */
+const HANDOFF_MS = 120;
+
+function wait(ms: number) {
+  return new Promise<void>((resolve) => setTimeout(resolve, ms));
+}
 
 async function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
   let timeoutId: ReturnType<typeof setTimeout> | undefined;
@@ -32,16 +38,16 @@ function warmProfile() {
 }
 
 export default function Index() {
-  const [target, setTarget] = useState<'auth' | 'tabs' | null>(null);
+  const router = useRouter();
+  const [showSplash, setShowSplash] = useState(true);
 
   useEffect(() => {
     let alive = true;
 
-    const fallback = setTimeout(() => {
-      if (alive) setTarget('auth');
-    }, BOOT_TIMEOUT_MS);
-
     (async () => {
+      const startedAt = Date.now();
+      let next: '/(tabs)' | '/(auth)' = '/(auth)';
+
       try {
         let token = await withTimeout(getAccessToken(), BOOT_TIMEOUT_MS);
         if (!token) {
@@ -49,35 +55,39 @@ export default function Index() {
           if (refresh) token = await withTimeout(refreshAccessToken(), BOOT_TIMEOUT_MS);
         }
         if (!alive) return;
-        clearTimeout(fallback);
 
         if (token) {
-          // Enter tabs immediately — profile warms in the background.
-          setTarget('tabs');
+          next = '/(tabs)';
           warmProfile();
-          return;
+        } else {
+          next = '/(auth)';
         }
-        setTarget('auth');
       } catch {
-        if (!alive) return;
-        clearTimeout(fallback);
-        setTarget('auth');
+        next = '/(auth)';
       }
+
+      if (!alive) return;
+
+      const remaining = SPLASH_MIN_MS - (Date.now() - startedAt);
+      if (remaining > 0) await wait(remaining);
+      if (!alive) return;
+
+      // Navigate first while splash still covers the screen.
+      router.replace(next);
+      await wait(HANDOFF_MS);
+      if (alive) setShowSplash(false);
     })();
 
     return () => {
       alive = false;
-      clearTimeout(fallback);
     };
-  }, []);
+  }, [router]);
 
-  if (!target) {
-    return (
-      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: Brand.orange }}>
-        <ActivityIndicator size="large" color="#ffffff" />
-      </View>
-    );
-  }
+  if (!showSplash) return <View style={styles.transparent} />;
 
-  return <Redirect href={target === 'tabs' ? '/(tabs)' : '/(auth)'} />;
+  return <SplashScreen />;
 }
+
+const styles = StyleSheet.create({
+  transparent: { flex: 1 },
+});

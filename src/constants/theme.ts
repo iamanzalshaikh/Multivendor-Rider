@@ -1,6 +1,6 @@
 import { Platform } from 'react-native';
 
-/** Shared QuickBite design tokens — aligned with MyApp + restaurant portal */
+/** Shared SD Services design tokens — aligned with customer app + restaurant portal */
 export const Colors = {
   light: {
     text: '#1a1c1c',

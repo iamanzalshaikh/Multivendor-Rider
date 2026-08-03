@@ -9,7 +9,23 @@ export function invalidateRiderProfile(qc: QueryClient) {
 
 export function invalidateRiderOrder(qc: QueryClient, orderId?: string) {
   if (!orderId) return;
-  void qc.invalidateQueries({ queryKey: riderKeys.order(orderId) });
+  // refetchType 'all' — Trip screen also has enabled:false cache subscribers
+  void qc.invalidateQueries({ queryKey: riderKeys.order(orderId), refetchType: 'all' });
+}
+
+export function patchRiderOrderFromSocket(
+  qc: QueryClient,
+  payload: { orderId?: string; orderStatus?: string; paymentStatus?: string },
+) {
+  if (!payload.orderId) return;
+  qc.setQueryData(riderKeys.order(payload.orderId), (prev: Record<string, unknown> | undefined) => {
+    if (!prev) return prev;
+    return {
+      ...prev,
+      ...(payload.orderStatus ? { orderStatus: payload.orderStatus } : {}),
+      ...(payload.paymentStatus ? { paymentStatus: payload.paymentStatus } : {}),
+    };
+  });
 }
 
 export function invalidateAvailableOrders(qc: QueryClient) {
@@ -50,12 +66,13 @@ export function invalidateAfterSocketOrderEvent(
 
   if (
     event === ServerSocketEvents.DELIVERY_CLAIMED ||
-    event === ServerSocketEvents.RIDER_ASSIGNED
+    event === ServerSocketEvents.RIDER_ASSIGNED ||
+    event === ServerSocketEvents.ORDER_CANCELLED
   ) {
     invalidateAvailableOrders(qc);
   }
 
-  if (event === ServerSocketEvents.ORDER_DELIVERED) {
+  if (event === ServerSocketEvents.ORDER_DELIVERED || event === ServerSocketEvents.ORDER_CANCELLED) {
     invalidateRiderEarnings(qc);
   }
 }
