@@ -56,7 +56,7 @@ export default function LoginScreen() {
     <View style={[styles.root, { backgroundColor: theme.background }]}>
       <StatusBar style="light" />
       <View style={styles.hero}>
-        <ThemedText style={styles.heroBadge}>QuickBite Partner</ThemedText>
+        <ThemedText style={styles.heroBadge}>SD Services Partner</ThemedText>
         <ThemedText style={styles.heroTitle}>Deliver. Earn. Grow.</ThemedText>
         <ThemedText style={styles.heroSub}>Sign in to go online and accept deliveries.</ThemedText>
       </View>

@@ -1,18 +1,14 @@
-/** Rider delivery status steps — aligned with CASE order flow */
+/** Rider delivery status steps — simplified CASE rider track */
 
 export type RiderDeliveryStatus =
-  | 'READY_FOR_PICKUP'
+  | 'PENDING'
   | 'RIDER_ASSIGNED'
-  | 'PICKED_UP'
   | 'ON_THE_WAY'
-  | 'ARRIVED'
   | 'DELIVERED'
   | 'CANCELLED';
 
 /**
- * Statuses an unassigned order can be accepted from — mirrors isRiderClaimableOrder()
- * in the backend. Online orders sit in PENDING_PAYMENT_VERIFICATION while an admin
- * checks the receipt, and the delivery runs ahead of that check.
+ * Statuses an unassigned order can be accepted from — mirrors backend claim rules.
  */
 const CLAIMABLE_STATUSES = [
   'PENDING',
@@ -22,6 +18,17 @@ const CLAIMABLE_STATUSES = [
   'READY_FOR_PICKUP',
 ];
 
+/** Shop still preparing — rider already claimed early. */
+const PRE_PICKUP_STATUSES = [
+  'PENDING',
+  'PENDING_PAYMENT_VERIFICATION',
+  'PAYMENT_APPROVED',
+  'CONFIRMED',
+  'PREPARING',
+  'READY_FOR_PICKUP',
+  'RIDER_ASSIGNED',
+];
+
 export function isClaimableOrder(order: {
   orderStatus: string;
   paymentStatus?: string | null;
@@ -29,25 +36,31 @@ export function isClaimableOrder(order: {
 }): boolean {
   if (order.riderId) return false;
   if (CLAIMABLE_STATUSES.includes(order.orderStatus)) return true;
+  if (order.orderStatus !== 'PENDING_PAYMENT_VERIFICATION') return false;
+  const pay = String(order.paymentStatus ?? '').toUpperCase();
   return (
-    order.orderStatus === 'PENDING_PAYMENT_VERIFICATION' &&
-    order.paymentStatus === 'PENDING_VERIFICATION'
+    pay === 'PENDING' ||
+    pay === 'PENDING_VERIFICATION' ||
+    pay === 'APPROVED' ||
+    pay === 'CAPTURED' ||
+    pay === 'COLLECTED'
   );
 }
 
+/** Rider-facing labels for the simplified track. */
 export const RIDER_STATUS_LABELS: Record<string, string> = {
-  PENDING: 'Available — accept to start',
-  PENDING_PAYMENT_VERIFICATION: 'Available — online payment verifying',
-  CONFIRMED: 'Confirmed',
-  PAYMENT_APPROVED: 'Payment approved',
-  PREPARING: 'Restaurant preparing',
-  READY_FOR_PICKUP: 'Ready for pickup',
-  RIDER_ASSIGNED: 'Assigned — go to restaurant',
-  PICKED_UP: 'Rider picked order',
+  PENDING: 'Pending',
+  PENDING_PAYMENT_VERIFICATION: 'Pending',
+  CONFIRMED: 'Pending — shop confirmed',
+  PAYMENT_APPROVED: 'Pending — payment approved',
+  PREPARING: 'Pending — shop preparing',
+  READY_FOR_PICKUP: 'Pending — ready at shop',
+  RIDER_ASSIGNED: 'Rider assigned',
+  PICKED_UP: 'On the way',
   ON_THE_WAY: 'On the way',
-  ARRIVED: 'Reached destination',
-  DELIVERED: 'Collected',
-  COMPLETED: 'Completed',
+  ARRIVED: 'On the way',
+  DELIVERED: 'Delivered',
+  COMPLETED: 'Delivered',
   CANCELLED: 'Cancelled',
 };
 
@@ -57,46 +70,70 @@ export type DeliveryStep = {
   description: string;
 };
 
+/** Visible rider progress: Pending → Assigned → On the way → Delivered */
 export const DELIVERY_FLOW_STEPS: DeliveryStep[] = [
+  {
+    status: 'PENDING',
+    label: 'Pending',
+    description: 'Order placed — shop preparing',
+  },
   {
     status: 'RIDER_ASSIGNED',
     label: 'Rider assigned',
-    description: 'Head to the restaurant and collect the order',
+    description: 'Head to the shop and collect the order',
   },
   {
-    status: 'PICKED_UP',
-    label: 'Rider picked order',
-    description: 'Confirm you collected the order from the restaurant',
-  },
-  {
-    status: 'ARRIVED',
-    label: 'Reached destination',
-    description: 'Confirm you arrived at the campus drop-off',
+    status: 'ON_THE_WAY',
+    label: 'On the way',
+    description: 'You have the order — head to campus drop-off',
   },
   {
     status: 'DELIVERED',
-    label: 'Collected',
-    description: 'Confirm handover — COD collected / bank verification pending',
+    label: 'Delivered',
+    description: 'COD: collect cash · Bank: delivery done (payment may still verify)',
   },
 ];
 
 export type RiderDeliveryAction = 'pickup' | 'arrived' | 'complete' | 'reject';
 
+/**
+ * Simplified rider actions:
+ * Assigned/pending → swipe On the way (pickup)
+ * On the way → swipe Deliver (complete)
+ */
 export function nextRiderAction(status: string): RiderDeliveryAction | null {
-  if (status === 'RIDER_ASSIGNED' || status === 'READY_FOR_PICKUP') return 'pickup';
-  if (status === 'PICKED_UP' || status === 'ON_THE_WAY') return 'arrived';
-  if (status === 'ARRIVED') return 'complete';
+  if (PRE_PICKUP_STATUSES.includes(status)) return 'pickup';
+  if (
+    status === 'PICKED_UP' ||
+    status === 'ON_THE_WAY' ||
+    status === 'ARRIVED'
+  ) {
+    return 'complete';
+  }
   return null;
 }
 
-export function actionButtonLabel(action: RiderDeliveryAction): string {
+/** Always allow complete — bank verification is async after delivery. */
+export function canCompleteDelivery(_order: {
+  paymentMethod?: string | null;
+  paymentStatus?: string | null;
+}): { ok: boolean; reason?: string } {
+  return { ok: true };
+}
+
+export function actionButtonLabel(
+  action: RiderDeliveryAction,
+  order?: { paymentMethod?: string | null },
+): string {
   switch (action) {
     case 'pickup':
-      return 'Rider picked order';
+      return 'On the way';
     case 'arrived':
-      return 'Reached destination';
+      return 'On the way';
     case 'complete':
-      return 'Mark collected';
+      return String(order?.paymentMethod ?? '').toUpperCase() === 'COD'
+        ? 'Collect & deliver'
+        : 'Confirm delivery';
     case 'reject':
       return 'Release order';
     default:
@@ -105,10 +142,18 @@ export function actionButtonLabel(action: RiderDeliveryAction): string {
 }
 
 export function stepIndexForStatus(status: string): number {
-  if (status === 'RIDER_ASSIGNED' || status === 'READY_FOR_PICKUP') return 0;
-  if (CLAIMABLE_STATUSES.includes(status) || status === 'PENDING_PAYMENT_VERIFICATION') return 0;
-  if (status === 'PICKED_UP' || status === 'ON_THE_WAY') return 1;
-  if (status === 'ARRIVED') return 2;
+  if (
+    status === 'PENDING' ||
+    status === 'PENDING_PAYMENT_VERIFICATION' ||
+    status === 'CONFIRMED' ||
+    status === 'PAYMENT_APPROVED' ||
+    status === 'PREPARING' ||
+    status === 'READY_FOR_PICKUP'
+  ) {
+    return 0;
+  }
+  if (status === 'RIDER_ASSIGNED') return 1;
+  if (status === 'PICKED_UP' || status === 'ON_THE_WAY' || status === 'ARRIVED') return 2;
   if (status === 'DELIVERED' || status === 'COMPLETED') return 3;
   return -1;
 }
@@ -116,7 +161,7 @@ export function stepIndexForStatus(status: string): number {
 /** Map rider UI actions to API order statuses */
 export function statusForRiderAction(action: RiderDeliveryAction): string | null {
   if (action === 'pickup') return 'PICKED_UP';
-  if (action === 'arrived') return 'ARRIVED';
+  if (action === 'arrived') return 'ON_THE_WAY';
   if (action === 'complete') return 'DELIVERED';
   return null;
 }

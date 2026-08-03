@@ -1,13 +1,19 @@
 import { memo, useCallback } from 'react';
-import { View, StyleSheet, Pressable, ActivityIndicator } from 'react-native';
+import { View, StyleSheet, Pressable, Alert } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { Ionicons } from '@expo/vector-icons';
+import Animated, { FadeInDown } from 'react-native-reanimated';
 
 import { DeliveryProgressBar } from '@/components/DeliveryProgressBar';
 import { OrderLocationBlock } from '@/components/OrderLocationBlock';
+import { SwipeToConfirm } from '@/components/SwipeToConfirm';
 import { ThemedText } from '@/components/themed-text';
-import { actionButtonLabel, nextRiderAction, RIDER_STATUS_LABELS } from '@/constants/deliveryStatus';
+import {
+  actionButtonLabel,
+  nextRiderAction,
+  RIDER_STATUS_LABELS,
+} from '@/constants/deliveryStatus';
 import { cardStyle, Layout } from '@/constants/layout';
 import { Fonts, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
@@ -38,6 +44,9 @@ export const ActiveOrderCard = memo(function ActiveOrderCard({ order, busy, onAc
     typeof order.customerId === 'object' ? order.customerId?.mobile : undefined;
   const next = nextRiderAction(order.orderStatus);
   const canReject = order.orderStatus === 'RIDER_ASSIGNED';
+  const isBank = String(order.paymentMethod ?? '').toUpperCase() === 'BANK_TRANSFER';
+  const isCod = String(order.paymentMethod ?? '').toUpperCase() === 'COD';
+  const pay = String(order.paymentStatus ?? '').toUpperCase();
 
   const openDetails = useCallback(() => {
     router.push(`/order/${order._id}` as never);
@@ -47,8 +56,15 @@ export const ActiveOrderCard = memo(function ActiveOrderCard({ order, busy, onAc
     prefetchRiderOrder(qc, order._id);
   }, [qc, order._id]);
 
+  const runPrimary = useCallback(() => {
+    if (!next) return;
+    onAction(next);
+  }, [next, onAction]);
+
   return (
-    <View style={[styles.card, cardStyle, { backgroundColor: theme.backgroundElement }]}>
+    <Animated.View
+      entering={FadeInDown.duration(280)}
+      style={[styles.card, cardStyle, { backgroundColor: theme.backgroundElement }]}>
       <View style={[styles.statusBar, { backgroundColor: theme.primarySoft }]}>
         <ThemedText style={[styles.statusText, { color: theme.primary }]}>
           {RIDER_STATUS_LABELS[order.orderStatus] ?? order.orderStatus}
@@ -104,13 +120,17 @@ export const ActiveOrderCard = memo(function ActiveOrderCard({ order, busy, onAc
             {formatJmd(riderEarningForOrder(order))}
           </ThemedText>
         </View>
-        {order.paymentMethod === 'COD' ? (
+        {isCod ? (
           <View style={[styles.codBadge, { backgroundColor: theme.primarySoft }]}>
             <ThemedText style={[styles.codText, { color: theme.primary }]}>COD · Collect cash</ThemedText>
           </View>
         ) : (
           <View style={[styles.codBadge, { backgroundColor: theme.partnerSoft }]}>
-            <ThemedText style={[styles.codText, { color: theme.partner }]}>Prepaid</ThemedText>
+            <ThemedText style={[styles.codText, { color: theme.partner }]}>
+              {pay === 'COLLECTED' || pay === 'APPROVED'
+                ? 'Bank · Settled'
+                : 'Bank · Verify after delivery'}
+            </ThemedText>
           </View>
         )}
       </View>
@@ -118,7 +138,12 @@ export const ActiveOrderCard = memo(function ActiveOrderCard({ order, busy, onAc
       <View style={styles.actions}>
         {canReject ? (
           <Pressable
-            onPress={() => onAction('reject')}
+            onPress={() =>
+              Alert.alert('Release order?', 'This job goes back to the pool.', [
+                { text: 'Cancel', style: 'cancel' },
+                { text: 'Release', style: 'destructive', onPress: () => onAction('reject') },
+              ])
+            }
             disabled={busy}
             style={[styles.secondaryBtn, { borderColor: theme.danger }]}>
             <ThemedText style={{ color: theme.danger, fontFamily: Fonts.bold, fontSize: 13 }}>
@@ -127,22 +152,17 @@ export const ActiveOrderCard = memo(function ActiveOrderCard({ order, busy, onAc
           </Pressable>
         ) : null}
         {next ? (
-          <Pressable
-            onPress={() => onAction(next)}
-            disabled={busy}
-            style={[
-              styles.primaryBtn,
-              { backgroundColor: theme.primary, flex: 1, opacity: busy ? 0.7 : 1 },
-            ]}>
-            {busy ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <ThemedText style={styles.primaryBtnText}>{actionButtonLabel(next)}</ThemedText>
-            )}
-          </Pressable>
+          <View style={styles.swipeWrap}>
+            <SwipeToConfirm
+              label={actionButtonLabel(next, order)}
+              busy={busy}
+              disabled={busy}
+              onConfirm={runPrimary}
+            />
+          </View>
         ) : null}
       </View>
-    </View>
+    </Animated.View>
   );
 });
 
@@ -168,38 +188,40 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
   },
   detailsText: { fontSize: 12 },
-  progressWrap: { paddingHorizontal: Spacing.three, paddingVertical: Spacing.two },
-  locations: { paddingHorizontal: Spacing.three },
+  progressWrap: { paddingHorizontal: Spacing.three, paddingTop: Spacing.two },
+  locations: { paddingHorizontal: Spacing.three, paddingTop: Spacing.two, gap: Spacing.two },
   summaryRow: {
     flexDirection: 'row',
+    alignItems: 'flex-end',
     justifyContent: 'space-between',
-    alignItems: 'center',
-    marginHorizontal: Spacing.three,
-    paddingTop: Spacing.two,
-    paddingBottom: Spacing.three,
+    gap: Spacing.two,
+    marginTop: Spacing.three,
+    paddingTop: Spacing.three,
+    paddingHorizontal: Spacing.three,
     borderTopWidth: 1,
   },
-  amount: { fontSize: 20, fontFamily: Fonts.extraBold, marginTop: 2 },
-  codBadge: { borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6 },
-  codText: { fontSize: 11, fontFamily: Fonts.bold },
-  actions: {
-    flexDirection: 'row',
-    gap: Spacing.two,
-    paddingHorizontal: Spacing.three,
-    paddingBottom: Spacing.three,
+  amount: { fontSize: 16, fontFamily: Fonts.extraBold, marginTop: 2 },
+  codBadge: {
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    maxWidth: 120,
   },
-  primaryBtn: { borderRadius: Layout.buttonRadius, paddingVertical: 14, alignItems: 'center' },
-  primaryBtnText: {
-    color: '#fff',
-    fontFamily: Fonts.extraBold,
-    fontSize: 14,
-    textAlign: 'center',
+  codText: { fontSize: 10, fontFamily: Fonts.bold },
+  actions: {
+    flexDirection: 'column',
+    alignItems: 'stretch',
+    gap: Spacing.two,
+    padding: Spacing.three,
+  },
+  swipeWrap: {
+    width: '100%',
   },
   secondaryBtn: {
-    borderRadius: Layout.buttonRadius,
-    paddingVertical: 14,
-    paddingHorizontal: 14,
-    alignItems: 'center',
     borderWidth: 1,
+    borderRadius: Layout.buttonRadius,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    alignItems: 'center',
   },
 });

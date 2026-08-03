@@ -16,18 +16,21 @@ import { riderKeys } from './keys';
 
 const FIVE_MIN = 5 * 60 * 1000;
 const TEN_MIN = 10 * 60 * 1000;
-/** Active trip order — one poll source in tabs layout; socket covers most updates. */
-const ACTIVE_ORDER_STALE = 30_000;
-const ACTIVE_ORDER_POLL = 30_000;
+/** Active trip order — socket is primary; poll is a safety net. */
+const ACTIVE_ORDER_STALE = 10_000;
+const ACTIVE_ORDER_POLL = 15_000;
+const ACTIVE_ORDER_POLL_FAST = 8_000;
 
 export function useRiderMeQuery(enabled = true) {
   const q = useQuery({
     queryKey: riderKeys.me,
     queryFn: fetchRiderMe,
     enabled,
-    staleTime: 60_000,
+    staleTime: 15_000,
     gcTime: TEN_MIN,
-    refetchOnMount: false,
+    // Always re-check on tab focus — clears stale currentOrderId after cancels.
+    refetchOnMount: true,
+    refetchOnReconnect: true,
   });
   usePerfQuery('RiderMe', q.isFetching, q.dataUpdatedAt);
   return q;
@@ -99,8 +102,16 @@ export function useActiveOrderPolling(orderId: string | undefined, enabled: bool
     enabled: Boolean(orderId) && enabled,
     staleTime: ACTIVE_ORDER_STALE,
     gcTime: TEN_MIN,
-    refetchOnMount: false,
-    refetchInterval: orderId && enabled ? ACTIVE_ORDER_POLL : false,
+    refetchOnMount: true,
+    refetchInterval: (query) => {
+      if (!orderId || !enabled) return false;
+      const pay = String(
+        (query.state.data as { paymentStatus?: string } | undefined)?.paymentStatus ?? '',
+      ).toUpperCase();
+      // Faster while waiting on bank verification so Complete unlocks quickly if socket misses.
+      if (pay === 'PENDING_VERIFICATION' || pay === 'PENDING') return ACTIVE_ORDER_POLL_FAST;
+      return ACTIVE_ORDER_POLL;
+    },
   });
   usePerfQuery(`OrderPoll(${orderId ?? 'none'})`, q.isFetching, q.dataUpdatedAt);
   return q;

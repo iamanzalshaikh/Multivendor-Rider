@@ -21,6 +21,7 @@ export const ServerSocketEvents = {
 export type OrderSocketPayload = {
   orderId?: string;
   orderStatus?: string;
+  paymentStatus?: string;
   /** Delivery fee + tip — what the rider earns for this trip */
   riderEarning?: number;
   deliveryFee?: number;

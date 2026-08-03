@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query';
+import { keepPreviousData, useQuery } from '@tanstack/react-query';
 
 import {
   buildMapDisplayPath,
@@ -29,10 +29,11 @@ async function fetchRoadRoute(input: {
   rider?: RoutePoint | null;
 }): Promise<RoutePoint[]> {
   const { orderId, orderStatus, restaurant, customer, rider } = input;
-  const prePickup = ['RIDER_ASSIGNED', 'READY_FOR_PICKUP'].includes(orderStatus ?? '');
+  const prePickup = ['RIDER_ASSIGNED', 'READY_FOR_PICKUP', 'PENDING', 'CONFIRMED', 'PREPARING', 'PENDING_PAYMENT_VERIFICATION'].includes(
+    orderStatus ?? '',
+  );
   const endpoints = resolveRouteEndpoints({ orderStatus, restaurant, customer, rider });
 
-  // Backend + client OSRM in parallel — first usable road path wins.
   const [apiPath, osrmActive] = await Promise.all([
     fetchOrderRoute(orderId).catch(() => [] as RoutePoint[]),
     endpoints ? fetchOsrmRoute(endpoints).catch(() => [] as RoutePoint[]) : Promise.resolve([] as RoutePoint[]),
@@ -40,7 +41,6 @@ async function fetchRoadRoute(input: {
   if (isRoutedPath(apiPath)) return apiPath;
   if (isRoutedPath(osrmActive)) return osrmActive;
 
-  // Before pickup: merge rider→restaurant + restaurant→customer roads
   if (prePickup && isValidRoutePoint(rider) && isValidRoutePoint(restaurant) && isValidRoutePoint(customer)) {
     const [toPickup, pickupToDrop] = await Promise.all([
       fetchOsrmRoute({ origin: rider!, destination: restaurant! }).catch(() => [] as RoutePoint[]),
@@ -67,17 +67,22 @@ export function useOrderRoutePath({
   const hasCoords =
     isValidRoutePoint(restaurant) || isValidRoutePoint(customer) || isValidRoutePoint(rider);
 
-  const riderKey = rider
-    ? `${Math.round(rider.latitude * 200)}_${Math.round(rider.longitude * 200)}`
-    : 'none';
+  // Do NOT put live GPS in the query key — it remounts forever and the spinner never stops.
+  const restKey = restaurant
+    ? `${restaurant.latitude.toFixed(3)},${restaurant.longitude.toFixed(3)}`
+    : 'r';
+  const custKey = customer
+    ? `${customer.latitude.toFixed(3)},${customer.longitude.toFixed(3)}`
+    : 'c';
 
   return useQuery({
-    queryKey: ['rider-order-route', orderId, orderStatus, riderKey],
+    queryKey: ['rider-order-route', orderId, orderStatus, restKey, custKey],
     enabled: Boolean(orderId) && enabled && hasCoords,
     staleTime: 45_000,
     gcTime: 5 * 60 * 1000,
     refetchOnMount: false,
     refetchInterval: 60_000,
+    placeholderData: keepPreviousData,
     queryFn: () =>
       fetchRoadRoute({
         orderId: orderId!,

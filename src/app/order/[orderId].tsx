@@ -14,6 +14,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { DeliveryProgressBar } from '@/components/DeliveryProgressBar';
 import { DeliveryMap } from '@/components/delivery-map';
 import { OrderLocationBlock } from '@/components/OrderLocationBlock';
+import { SwipeToConfirm } from '@/components/SwipeToConfirm';
 import { ThemedText } from '@/components/themed-text';
 import {
   actionButtonLabel,
@@ -175,6 +176,7 @@ export default function OrderDetailScreen() {
   const customer = typeof order.customerId === 'object' ? order.customerId : undefined;
   const isAvailable = isClaimableOrder(order);
   const next = isAvailable ? null : nextRiderAction(order.orderStatus);
+  const pay = String(order.paymentStatus ?? '').toUpperCase();
   const items = order.items ?? order.orderItems ?? [];
   const count = itemCount(order);
 
@@ -200,7 +202,7 @@ export default function OrderDetailScreen() {
             rider={riderCoord}
             riderHeading={riderGps?.heading}
             routePath={routeQ.data}
-            routeLoading={routeQ.isLoading}
+            routeLoading={routeQ.isFetching && !routeQ.data}
             followRider={isActiveTrip}
             orderStatus={order.orderStatus}
             height={220}
@@ -290,8 +292,9 @@ export default function OrderDetailScreen() {
             <View style={[styles.codRow, { backgroundColor: theme.partnerSoft }]}>
               <Ionicons name="card-outline" size={16} color={theme.partner} />
               <ThemedText style={[styles.codText, { color: theme.partner }]}>
-                Paid online — collect no cash. Your earning clears once the office
-                verifies the receipt.
+                {pay === 'COLLECTED' || pay === 'APPROVED'
+                  ? 'Bank · Settled — collect no cash'
+                  : 'Bank · Deliver now — payment verifies after delivery'}
               </ThemedText>
             </View>
           )}
@@ -300,27 +303,31 @@ export default function OrderDetailScreen() {
 
       {(isAvailable || next) ? (
         <View style={[styles.footer, { backgroundColor: theme.backgroundElement, borderTopColor: theme.border }]}>
-          <Pressable
-            onPress={() => {
-              if (isAvailable) actionMut.mutate('accept');
-              else if (next) actionMut.mutate(next);
-            }}
-            disabled={actionMut.isPending}
-            style={[
-              styles.cta,
-              {
-                backgroundColor: isAvailable ? theme.partner : theme.primary,
-                opacity: actionMut.isPending ? 0.7 : 1,
-              },
-            ]}>
-            {actionMut.isPending ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <ThemedText style={styles.ctaText}>
-                {isAvailable ? 'Accept delivery' : next ? actionButtonLabel(next) : 'View order'}
-              </ThemedText>
-            )}
-          </Pressable>
+          {isAvailable ? (
+            <Pressable
+              onPress={() => actionMut.mutate('accept')}
+              disabled={actionMut.isPending}
+              style={[
+                styles.cta,
+                {
+                  backgroundColor: theme.partner,
+                  opacity: actionMut.isPending ? 0.55 : 1,
+                },
+              ]}>
+              {actionMut.isPending ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <ThemedText style={styles.ctaText}>Accept delivery</ThemedText>
+              )}
+            </Pressable>
+          ) : next ? (
+            <SwipeToConfirm
+              label={actionButtonLabel(next, order)}
+              busy={actionMut.isPending}
+              disabled={actionMut.isPending}
+              onConfirm={() => actionMut.mutate(next)}
+            />
+          ) : null}
         </View>
       ) : null}
     </SafeAreaView>

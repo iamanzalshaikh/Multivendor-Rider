@@ -2,16 +2,17 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   View,
   StyleSheet,
-  ActivityIndicator,
   RefreshControl,
   Alert,
   Pressable,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { useState } from 'react';
 
 import { ActiveOrderCard } from '@/components/ActiveOrderCard';
 import { ScreenHeader } from '@/components/screen-header';
+import { RiderTripSkeleton } from '@/components/skeleton';
 import { TabScrollView } from '@/components/tab-scroll-view';
 import { ThemedText } from '@/components/themed-text';
 import { Layout } from '@/constants/layout';
@@ -22,6 +23,7 @@ import {
   optimisticStatusForAction,
   patchOrderStatusOptimistic,
 } from '@/lib/optimisticOrderStatus';
+import { useClearStaleActiveTrip } from '@/hooks/use-clear-stale-active-trip';
 import { useTabBarHeight } from '@/hooks/use-tab-bar-height';
 import { useRiderProfile } from '@/hooks/use-rider-profile';
 import { useTheme } from '@/hooks/use-theme';
@@ -32,16 +34,31 @@ import {
   pickupOrder,
   rejectOrder,
 } from '@/services/riders';
+import type { RiderOrder } from '@/types/rider';
 
 export default function TripScreen() {
   const theme = useTheme();
   const router = useRouter();
   const qc = useQueryClient();
   const tabBarHeight = useTabBarHeight();
-  const { rider, onlineStatus, currentOrderId: activeOrderId, refetch: refetchProfile, isLoading: profileLoading } =
-    useRiderProfile();
+  const [refreshing, setRefreshing] = useState(false);
+  const {
+    rider,
+    onlineStatus,
+    currentOrderId: activeOrderId,
+    refetch: refetchProfile,
+    isLoading: profileLoading,
+  } = useRiderProfile();
 
   const activeOrderQ = useRiderOrderCache(activeOrderId);
+  useClearStaleActiveTrip(activeOrderId, activeOrderQ.data?.orderStatus);
+
+  const orderStatus = String(activeOrderQ.data?.orderStatus ?? '').toUpperCase();
+  const tripEnded =
+    orderStatus === 'CANCELLED' ||
+    orderStatus === 'COMPLETED' ||
+    orderStatus === 'DELIVERED';
+  const effectiveActiveId = tripEnded ? undefined : activeOrderId;
 
   const actionMut = useMutation({
     mutationFn: async ({
@@ -71,7 +88,13 @@ export default function TripScreen() {
       }
       Alert.alert('Action failed', e instanceof Error ? e.message : 'Try again');
     },
-    onSuccess: (_, { orderId, action }) => {
+    onSuccess: (data, { orderId, action }) => {
+      if (data && typeof data === 'object' && '_id' in (data as object)) {
+        const updated = data as RiderOrder;
+        qc.setQueryData(riderKeys.order(orderId), (prev: RiderOrder | undefined) =>
+          prev ? { ...prev, ...updated } : updated,
+        );
+      }
       if (action === 'complete') {
         invalidateAfterDeliveryComplete(qc, orderId);
       } else {
@@ -82,8 +105,9 @@ export default function TripScreen() {
 
   if (profileLoading && !rider) {
     return (
-      <View style={[styles.center, { backgroundColor: theme.background, paddingBottom: tabBarHeight }]}>
-        <ActivityIndicator color={theme.primary} />
+      <View style={[styles.root, { backgroundColor: theme.background }]}>
+        <ScreenHeader title="Active trip" subtitle="Loading…" />
+        <RiderTripSkeleton />
       </View>
     );
   }
@@ -91,16 +115,23 @@ export default function TripScreen() {
   if (!onlineStatus) {
     return (
       <View style={[styles.center, { backgroundColor: theme.background, paddingBottom: tabBarHeight }]}>
-        <Ionicons name="cloud-offline-outline" size={48} color={theme.textSecondary} />
-        <ThemedText style={styles.emptyTitle}>You are offline</ThemedText>
+        <View style={[styles.emptyIcon, { backgroundColor: theme.backgroundElement }]}>
+          <Ionicons name="cloud-offline-outline" size={44} color={theme.textSecondary} />
+        </View>
+        <ThemedText style={styles.emptyTitle}>Go online to see your trip</ThemedText>
         <ThemedText type="small" themeColor="textSecondary" style={styles.emptySub}>
-          Use the online toggle on Home to start delivering.
+          Turn on availability from Home, then accept a job from the Jobs tab.
         </ThemedText>
+        <Pressable
+          onPress={() => router.push('/(tabs)')}
+          style={[styles.cta, { backgroundColor: theme.primary }]}>
+          <ThemedText style={styles.ctaText}>Open Home</ThemedText>
+        </Pressable>
       </View>
     );
   }
 
-  if (!activeOrderId) {
+  if (!effectiveActiveId) {
     return (
       <View style={[styles.root, { backgroundColor: theme.background }]}>
         <ScreenHeader title="Active trip" subtitle="No delivery in progress" />
@@ -110,7 +141,9 @@ export default function TripScreen() {
           </View>
           <ThemedText style={styles.emptyTitle}>No active trip</ThemedText>
           <ThemedText type="small" themeColor="textSecondary" style={styles.emptySub}>
-            Accept a job from the Jobs tab to start a delivery.
+            {tripEnded
+              ? 'That delivery ended or was cancelled. Browse Jobs for the next one.'
+              : 'Accept a job from the Jobs tab to start a delivery.'}
           </ThemedText>
           <Pressable
             onPress={() => router.push('/(tabs)/jobs')}
@@ -124,27 +157,31 @@ export default function TripScreen() {
 
   return (
     <View style={[styles.root, { backgroundColor: theme.background }]}>
-      <ScreenHeader title="Active trip" subtitle="Complete each step below" />
-
+      <ScreenHeader title="Active trip" subtitle="Complete each step to finish delivery" />
       <TabScrollView
         style={styles.flex1}
+        contentContainerStyle={{ paddingBottom: tabBarHeight + Spacing.four }}
         refreshControl={
           <RefreshControl
-            refreshing={activeOrderQ.isRefetching}
-            onRefresh={() => {
-              activeOrderQ.refetch();
-              refetchProfile();
+            refreshing={refreshing}
+            onRefresh={async () => {
+              setRefreshing(true);
+              try {
+                await Promise.all([activeOrderQ.refetch(), refetchProfile()]);
+              } finally {
+                setRefreshing(false);
+              }
             }}
           />
         }>
-        {activeOrderQ.isLoading ? (
-          <ActivityIndicator color={theme.primary} style={{ marginTop: Spacing.four }} />
+        {activeOrderQ.isLoading && !activeOrderQ.data ? (
+          <RiderTripSkeleton />
         ) : activeOrderQ.data ? (
           <View style={styles.section}>
             <ActiveOrderCard
               order={activeOrderQ.data}
               busy={actionMut.isPending}
-              onAction={(action) => actionMut.mutate({ orderId: activeOrderId, action })}
+              onAction={(action) => actionMut.mutate({ orderId: effectiveActiveId, action })}
             />
           </View>
         ) : null}
@@ -157,7 +194,12 @@ const styles = StyleSheet.create({
   root: { flex: 1 },
   flex1: { flex: 1 },
   section: { paddingHorizontal: Layout.screenPadding },
-  center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: Spacing.five },
+  center: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: Spacing.five,
+  },
   emptyBody: {
     flex: 1,
     alignItems: 'center',

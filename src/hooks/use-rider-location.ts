@@ -38,7 +38,7 @@ export function useRiderLocationTracking(enabled: boolean) {
         timeInterval: 15000,
         showsBackgroundLocationIndicator: true,
         foregroundService: {
-          notificationTitle: 'QuickBite Rider',
+          notificationTitle: 'SD Services Rider',
           notificationBody: 'Tracking location for your active delivery',
           notificationColor: '#ff5a00',
         },

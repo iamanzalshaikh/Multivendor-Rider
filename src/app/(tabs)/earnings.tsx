@@ -7,6 +7,7 @@ import { memo, useCallback, useState } from 'react';
 import { EarningsHeroCard } from '@/components/EarningsHeroCard';
 import { ScreenHeader } from '@/components/screen-header';
 import { SectionCard } from '@/components/section-card';
+import { RiderEarningsSkeleton, SkeletonBlock } from '@/components/skeleton';
 import { StatCard, StatGrid } from '@/components/stat-card';
 import { TabScrollView } from '@/components/tab-scroll-view';
 import { ThemedText } from '@/components/themed-text';
@@ -135,6 +136,15 @@ export default function EarningsScreen() {
     summaryQ.isRefetching ||
     payoutsQ.isRefetching ||
     withdrawalsQ.isRefetching;
+
+  if (earningsQ.isLoading && summaryQ.isLoading && !earningsQ.data && !summaryQ.data) {
+    return (
+      <View style={[styles.root, { backgroundColor: theme.background }]}>
+        <ScreenHeader title="Earnings" subtitle="Loading…" />
+        <RiderEarningsSkeleton />
+      </View>
+    );
+  }
 
   return (
     <View style={[styles.root, { backgroundColor: theme.background }]}>
@@ -279,7 +289,18 @@ export default function EarningsScreen() {
 
           <SectionCard title="Recent deliveries" subtitle="Last 30 completed trips" noPadding>
             {historyQ.isLoading ? (
-              <ActivityIndicator color={theme.primary} style={{ paddingVertical: Spacing.three }} />
+              <View style={{ padding: Spacing.three, gap: Spacing.three }}>
+                {[0, 1, 2].map((i) => (
+                  <View key={i} style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                    <SkeletonBlock width={40} height={40} radius={12} />
+                    <View style={{ flex: 1, gap: 6 }}>
+                      <SkeletonBlock width="50%" height={13} />
+                      <SkeletonBlock width="30%" height={11} />
+                    </View>
+                    <SkeletonBlock width={52} height={14} />
+                  </View>
+                ))}
+              </View>
             ) : history.length ? (
               <FlatList
                 data={history}

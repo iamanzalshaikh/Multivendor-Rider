@@ -5,6 +5,7 @@ import { alertNewDeliveryOffer } from '@/lib/pushNotifications';
 import {
   invalidateAfterSocketOrderEvent,
   invalidateAvailableOrders,
+  patchRiderOrderFromSocket,
 } from '@/lib/riderQueryInvalidation';
 import { connectSocket, getSocketInstance } from '@/lib/socketClient';
 import { emitRiderOnlineStatus } from '@/lib/riderSocketActions';
@@ -74,6 +75,8 @@ export function useRiderSocket(enabled: boolean) {
 
     const refreshHandlers = REFRESH_EVENTS.map((event) => {
       const handler = (payload: OrderSocketPayload = {}) => {
+        // Instant UI — don't wait for the HTTP refetch (payment verify felt ~1 min).
+        patchRiderOrderFromSocket(qc, payload);
         invalidateAfterSocketOrderEvent(qc, event, payload.orderId);
       };
       return { event, handler };

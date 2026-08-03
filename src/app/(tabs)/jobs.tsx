@@ -2,7 +2,6 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   View,
   StyleSheet,
-  ActivityIndicator,
   RefreshControl,
   Alert,
   FlatList,
@@ -14,6 +13,7 @@ import { useCallback } from 'react';
 
 import { AvailableOrderCard } from '@/components/AvailableOrderCard';
 import { ScreenHeader } from '@/components/screen-header';
+import { RiderJobsSkeleton } from '@/components/skeleton';
 import { ThemedText } from '@/components/themed-text';
 import { Layout } from '@/constants/layout';
 import { Fonts, Spacing } from '@/constants/theme';
@@ -67,8 +67,9 @@ export default function JobsScreen() {
 
   if (profileLoading && !rider) {
     return (
-      <View style={[styles.center, { backgroundColor: theme.background, paddingBottom: tabBarHeight }]}>
-        <ActivityIndicator color={theme.primary} />
+      <View style={[styles.root, { backgroundColor: theme.background }]}>
+        <ScreenHeader title="Delivery jobs" subtitle="Loading…" />
+        <RiderJobsSkeleton />
       </View>
     );
   }
@@ -138,7 +139,7 @@ export default function JobsScreen() {
         }
         ListEmptyComponent={
           availableQ.isLoading ? (
-            <ActivityIndicator color={theme.primary} style={{ marginTop: Spacing.four }} />
+            <RiderJobsSkeleton />
           ) : (
             <View style={styles.center}>
               <View style={[styles.offlineIcon, { backgroundColor: theme.backgroundElement }]}>
