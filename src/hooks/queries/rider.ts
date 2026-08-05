@@ -3,6 +3,7 @@ import { useQuery, type QueryClient } from '@tanstack/react-query';
 import { usePerfQuery } from '@/lib/perf';
 import {
   fetchAvailableOrders,
+  fetchCaseShiftPurchases,
   fetchDeliveryHistory,
   fetchEarningsSummary,
   fetchOrderById,
@@ -168,6 +169,19 @@ export function useWithdrawalRequestsQuery(page: number, limit: number, enabled 
     refetchOnMount: false,
   });
   usePerfQuery('Withdrawals', q.isFetching, q.dataUpdatedAt);
+  return q;
+}
+
+export function useShiftPurchasesQuery(enabled = true) {
+  const q = useQuery({
+    queryKey: riderKeys.shiftPurchases,
+    queryFn: fetchCaseShiftPurchases,
+    enabled,
+    staleTime: 15_000,
+    gcTime: TEN_MIN,
+    refetchOnMount: true,
+  });
+  usePerfQuery('ShiftPurchases', q.isFetching, q.dataUpdatedAt);
   return q;
 }
 

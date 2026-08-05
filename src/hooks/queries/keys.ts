@@ -9,6 +9,7 @@ export const riderKeys = {
   order: (orderId: string) => ['rider', 'order', orderId] as const,
   payouts: (page: number, limit: number) => ['rider', 'payouts', page, limit] as const,
   withdrawals: (page: number, limit: number) => ['rider', 'withdrawals', page, limit] as const,
+  shiftPurchases: ['rider', 'shift-purchases'] as const,
 };
 
 export const notificationKeys = {

@@ -205,6 +205,21 @@ export default function EarningsScreen() {
             />
           </StatGrid>
 
+          <Pressable
+            onPress={() => router.push('/purchase')}
+            style={[styles.floatCta, { backgroundColor: theme.backgroundElement, borderColor: theme.border }]}>
+            <View style={[styles.tripIcon, { backgroundColor: theme.primarySoft }]}>
+              <Ionicons name="wallet-outline" size={18} color={theme.primary} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <ThemedText style={styles.historyId}>Driver float & purchases</ThemedText>
+              <ThemedText type="small" themeColor="textSecondary">
+                Log fuel / expenses · see expected cash to return
+              </ThemedText>
+            </View>
+            <Ionicons name="chevron-forward" size={16} color={theme.textSecondary} />
+          </Pressable>
+
           <SectionCard
             title="How you were paid"
             subtitle="Earnings count once the payment is settled">
@@ -409,6 +424,15 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontFamily: Fonts.bold,
     fontSize: 15,
+  },
+  floatCta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.two,
+    borderWidth: 1,
+    borderRadius: Layout.cardRadius,
+    padding: Spacing.three,
+    marginBottom: Spacing.three,
   },
   historyRow: {
     flexDirection: 'row',

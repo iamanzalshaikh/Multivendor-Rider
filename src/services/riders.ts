@@ -293,3 +293,60 @@ export async function fetchOrderRoute(orderId: string) {
   );
   return body.data?.path ?? [];
 }
+
+export type ShiftPurchaseCategory = 'FUEL' | 'PARKING' | 'FOOD_EXTRA' | 'SUPPLIES' | 'OTHER';
+
+export type RiderShiftPurchase = {
+  id: string;
+  category: ShiftPurchaseCategory | string;
+  amount: number;
+  note?: string | null;
+  receiptUrl?: string | null;
+  status: 'PENDING' | 'APPROVED' | 'REJECTED' | string;
+  rejectReason?: string | null;
+  createdAt: string;
+  reviewedAt?: string | null;
+};
+
+export type RiderShiftSummary = {
+  id: string;
+  floatIssued: number;
+  cashCollected: number;
+  cashSpentPurchases: number;
+  deliveryFeesCollected: number;
+  tipsReceived: number;
+  commissionEarned: number;
+  riderKeep: number;
+  expectedCashReturn: number;
+  deliveriesCompleted: number;
+  startedAt: string;
+  endedAt?: string | null;
+  purchases?: RiderShiftPurchase[];
+};
+
+export async function fetchCaseShiftPurchases() {
+  const body = await apiFetch<
+    ApiEnvelope<{ shift: RiderShiftSummary | null; purchases: RiderShiftPurchase[] }>
+  >('/riders/case/purchases');
+  return body.data ?? { shift: null, purchases: [] };
+}
+
+export async function startCaseShift(floatIssued = 0) {
+  const body = await apiFetch<ApiEnvelope<RiderShiftSummary>>('/riders/case/shift/start', {
+    method: 'POST',
+    body: JSON.stringify({ floatIssued }),
+  });
+  return body.data!;
+}
+
+export async function logShiftPurchase(input: {
+  amount: number;
+  category?: ShiftPurchaseCategory;
+  note?: string;
+}) {
+  const body = await apiFetch<ApiEnvelope<RiderShiftPurchase>>('/riders/case/purchases', {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
+  return body.data!;
+}
