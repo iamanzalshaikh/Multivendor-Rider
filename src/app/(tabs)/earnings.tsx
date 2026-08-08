@@ -19,12 +19,11 @@ import {
   useEarningsSummaryQuery,
   usePayoutHistoryQuery,
   useRiderEarningsQuery,
-  useWithdrawalRequestsQuery,
+  useShiftPurchasesQuery,
 } from '@/hooks/queries/rider';
 import { useTheme } from '@/hooks/use-theme';
 import { formatJmd, riderEarningForOrder } from '@/lib/money';
 import { orderDisplayId } from '@/lib/orderDisplay';
-import { requestWithdrawal } from '@/services/riders';
 import type { RiderOrder } from '@/types/rider';
 
 function formatDate(value?: string) {
@@ -105,27 +104,16 @@ export default function EarningsScreen() {
   const summaryQ = useEarningsSummaryQuery(focused);
   const historyQ = useDeliveryHistoryQuery(1, 30, focused);
   const payoutsQ = usePayoutHistoryQuery(1, 10, focused);
-  const withdrawalsQ = useWithdrawalRequestsQuery(1, 10, focused);
-
-  const withdrawMut = useMutation({
-    mutationFn: (amount: number) => requestWithdrawal(amount),
-    onSuccess: () => {
-      withdrawalsQ.refetch();
-      summaryQ.refetch();
-      Alert.alert('Withdrawal requested', 'Admin will review your request.');
-    },
-    onError: (err: Error) => Alert.alert('Withdrawal failed', err.message),
-  });
+  const shiftPurchasesQ = useShiftPurchasesQuery(focused);
 
   const earnings = earningsQ.data;
   const summary = summaryQ.data;
   const history = historyQ.data?.orders ?? [];
   const payouts = payoutsQ.data?.payouts ?? [];
-  const withdrawals = withdrawalsQ.data?.requests ?? [];
+  const purchases = shiftPurchasesQ.data?.purchases ?? [];
   const pendingAmount = summary?.pendingPayout?.grossEarnings ?? 0;
   const paidAmount = summary?.totalPaidOut?.grossEarnings ?? 0;
   const unpaidCount = summary?.pendingPayout?.deliveryCount ?? 0;
-  const availableBalance = withdrawalsQ.data?.availableBalance ?? pendingAmount;
   const perDelivery = summary?.earningPerDelivery ?? 0;
   const cash = summary?.cash;
   const online = summary?.online;
@@ -135,7 +123,7 @@ export default function EarningsScreen() {
     earningsQ.isRefetching ||
     summaryQ.isRefetching ||
     payoutsQ.isRefetching ||
-    withdrawalsQ.isRefetching;
+    shiftPurchasesQ.isRefetching;
 
   if (earningsQ.isLoading && summaryQ.isLoading && !earningsQ.data && !summaryQ.data) {
     return (
@@ -157,11 +145,11 @@ export default function EarningsScreen() {
               earningsQ.refetch();
               summaryQ.refetch();
               payoutsQ.refetch();
-              withdrawalsQ.refetch();
+              shiftPurchasesQ.refetch();
             }}
           />
         }>
-        <ScreenHeader title="Earnings" subtitle="Track payouts, trips, and withdrawals" />
+        <ScreenHeader title="Earnings" subtitle="Track payouts, trips, and purchases" />
 
         <View style={styles.content}>
           <EarningsHeroCard
@@ -187,13 +175,6 @@ export default function EarningsScreen() {
               value={formatJmd(paidAmount)}
               hint="Total transferred"
               icon="checkmark-circle-outline"
-              accent="partner"
-            />
-            <StatCard
-              label="Available"
-              value={formatJmd(availableBalance)}
-              hint="Ready to withdraw"
-              icon="cash-outline"
               accent="partner"
             />
             <StatCard
@@ -275,32 +256,7 @@ export default function EarningsScreen() {
             ) : null}
           </SectionCard>
 
-          {availableBalance > 0 ? (
-            <Pressable
-              style={[styles.withdrawBtn, { backgroundColor: theme.primary }]}
-              disabled={withdrawMut.isPending}
-              onPress={() => {
-                Alert.alert(
-                  'Request withdrawal',
-                  `Withdraw ${formatJmd(availableBalance)} to your bank account?`,
-                  [
-                    { text: 'Cancel', style: 'cancel' },
-                    { text: 'Request', onPress: () => withdrawMut.mutate(availableBalance) },
-                  ],
-                );
-              }}>
-              {withdrawMut.isPending ? (
-                <ActivityIndicator color="#fff" />
-              ) : (
-                <>
-                  <Ionicons name="arrow-down-circle-outline" size={20} color="#fff" />
-                  <ThemedText style={styles.withdrawBtnText}>
-                    Request withdrawal · {formatJmd(availableBalance)}
-                  </ThemedText>
-                </>
-              )}
-            </Pressable>
-          ) : null}
+
 
           <SectionCard title="Recent deliveries" subtitle="Last 30 completed trips" noPadding>
             {historyQ.isLoading ? (
@@ -346,31 +302,51 @@ export default function EarningsScreen() {
             )}
           </SectionCard>
 
-          {withdrawals.length > 0 ? (
-            <SectionCard title="Withdrawal requests" subtitle="Admin review status" noPadding>
-              {withdrawals.map((w, i) => (
+          <SectionCard title="Your purchases" subtitle="Shift purchase requests" noPadding>
+            {purchases.length === 0 ? (
+              <View style={styles.empty}>
+                <Ionicons name="receipt-outline" size={32} color={theme.textSecondary} />
+                <ThemedText style={styles.emptyTitle}>No purchases logged</ThemedText>
+                <ThemedText type="small" themeColor="textSecondary" style={styles.emptySub}>
+                  No purchases logged on this shift yet.
+                </ThemedText>
+              </View>
+            ) : (
+              purchases.map((p, i) => (
                 <View
-                  key={w._id}
+                  key={p.id}
                   style={[
                     styles.historyRow,
-                    i < withdrawals.length - 1 && { borderBottomWidth: 1, borderBottomColor: theme.border },
+                    i < purchases.length - 1 && { borderBottomWidth: 1, borderBottomColor: theme.border },
                   ]}>
                   <View style={[styles.tripIcon, { backgroundColor: theme.primarySoft }]}>
-                    <Ionicons name="swap-horizontal-outline" size={18} color={theme.primary} />
+                    <Ionicons name="cart-outline" size={18} color={theme.primary} />
                   </View>
                   <View style={styles.historyLeft}>
-                    <ThemedText style={styles.historyId}>{formatJmd(w.amount)}</ThemedText>
-                    <ThemedText type="small" style={{ color: statusColor(w.status, theme) }}>
-                      {formatPayoutStatus(w.status)}
+                    <ThemedText style={styles.historyId}>
+                      {String(p.category).replace(/_/g, ' ')}
+                    </ThemedText>
+                    {p.note ? (
+                      <ThemedText type="small" themeColor="textSecondary" numberOfLines={2}>
+                        {p.note}
+                      </ThemedText>
+                    ) : null}
+                    {p.rejectReason ? (
+                      <ThemedText type="small" style={{ color: theme.danger }}>
+                        {p.rejectReason}
+                      </ThemedText>
+                    ) : null}
+                  </View>
+                  <View style={{ alignItems: 'flex-end', gap: 2 }}>
+                    <ThemedText style={styles.historyEarn}>{formatJmd(p.amount)}</ThemedText>
+                    <ThemedText type="small" style={{ color: statusColor(p.status, theme), fontFamily: Fonts.bold }}>
+                      {p.status}
                     </ThemedText>
                   </View>
-                  <ThemedText type="small" themeColor="textSecondary">
-                    {formatDate(w.createdAt)}
-                  </ThemedText>
                 </View>
-              ))}
-            </SectionCard>
-          ) : null}
+              ))
+            )}
+          </SectionCard>
 
           {payouts.length > 0 ? (
             <SectionCard title="Payout history" subtitle="Completed transfers" noPadding>
