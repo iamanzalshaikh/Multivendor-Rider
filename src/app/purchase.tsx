@@ -86,7 +86,7 @@ export default function LogPurchaseScreen() {
         <Pressable onPress={() => router.back()} hitSlop={12} style={styles.backBtn}>
           <Ionicons name="arrow-back" size={22} color={theme.text} />
         </Pressable>
-        <ThemedText style={styles.headerTitle}>Log purchase</ThemedText>
+        <ThemedText style={styles.headerTitle}>Rider float</ThemedText>
         <View style={{ width: 40 }} />
       </View>
 

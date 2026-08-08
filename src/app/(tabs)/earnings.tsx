@@ -1,5 +1,5 @@
-import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { View, StyleSheet, RefreshControl, ActivityIndicator, Alert, Pressable, FlatList, Platform } from 'react-native';
+import { useQueryClient } from '@tanstack/react-query';
+import { View, StyleSheet, RefreshControl, Pressable, FlatList, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { memo, useCallback, useState } from 'react';
@@ -110,14 +110,10 @@ export default function EarningsScreen() {
   const summary = summaryQ.data;
   const history = historyQ.data?.orders ?? [];
   const payouts = payoutsQ.data?.payouts ?? [];
-  const purchases = shiftPurchasesQ.data?.purchases ?? [];
+  const shift = shiftPurchasesQ.data?.shift;
   const pendingAmount = summary?.pendingPayout?.grossEarnings ?? 0;
   const paidAmount = summary?.totalPaidOut?.grossEarnings ?? 0;
   const unpaidCount = summary?.pendingPayout?.deliveryCount ?? 0;
-  const perDelivery = summary?.earningPerDelivery ?? 0;
-  const cash = summary?.cash;
-  const online = summary?.online;
-  const awaiting = summary?.awaitingVerification;
   const refreshing =
     historyQ.isRefetching ||
     earningsQ.isRefetching ||
@@ -149,7 +145,7 @@ export default function EarningsScreen() {
             }}
           />
         }>
-        <ScreenHeader title="Earnings" subtitle="Track payouts, trips, and purchases" />
+        <ScreenHeader title="Earnings" subtitle="Float, payouts, and trips" />
 
         <View style={styles.content}>
           <EarningsHeroCard
@@ -158,105 +154,81 @@ export default function EarningsScreen() {
             meta={[
               { value: formatJmd(earnings?.totalEarnings), label: 'All time' },
               { value: `${earnings?.totalDeliveries ?? 0}`, label: 'Trips' },
-              { value: formatJmd(perDelivery), label: 'Avg / trip' },
+              { value: formatJmd(pendingAmount), label: 'Pending' },
             ]}
           />
+
+          {shift ? (
+            <Pressable
+              onPress={() => router.push('/purchase')}
+              style={[styles.floatCard, { backgroundColor: theme.backgroundElement, borderColor: theme.border }]}>
+              <View style={styles.floatHeader}>
+                <ThemedText style={styles.historyId}>Today&apos;s float</ThemedText>
+                <ThemedText type="link" style={{ fontSize: 12 }}>
+                  Log purchase
+                </ThemedText>
+              </View>
+              <View style={styles.floatRow}>
+                <View style={styles.floatCol}>
+                  <ThemedText type="small" themeColor="textSecondary">
+                    Opening
+                  </ThemedText>
+                  <ThemedText style={styles.floatValue}>{formatJmd(shift.floatIssued)}</ThemedText>
+                </View>
+                <View style={styles.floatCol}>
+                  <ThemedText type="small" themeColor="textSecondary">
+                    You keep
+                  </ThemedText>
+                  <ThemedText style={[styles.floatValue, { color: theme.partner }]}>
+                    {formatJmd(shift.riderKeep)}
+                  </ThemedText>
+                </View>
+                <View style={styles.floatCol}>
+                  <ThemedText type="small" themeColor="textSecondary">
+                    Return to admin
+                  </ThemedText>
+                  <ThemedText style={[styles.floatValue, { color: theme.primary }]}>
+                    {formatJmd(shift.expectedCashReturn)}
+                  </ThemedText>
+                </View>
+              </View>
+              <ThemedText type="small" themeColor="textSecondary" style={{ marginTop: Spacing.two }}>
+                COD collected {formatJmd(shift.cashCollected)} · Purchases{' '}
+                {formatJmd(shift.cashSpentPurchases)}
+              </ThemedText>
+            </Pressable>
+          ) : (
+            <Pressable
+              onPress={() => router.push('/purchase')}
+              style={[styles.floatCard, { backgroundColor: theme.backgroundElement, borderColor: theme.border }]}>
+              <View style={styles.floatHeader}>
+                <View style={{ flex: 1 }}>
+                  <ThemedText style={styles.historyId}>Rider float</ThemedText>
+                  <ThemedText type="small" themeColor="textSecondary">
+                    No open shift — ask admin to issue float, or start one here
+                  </ThemedText>
+                </View>
+                <Ionicons name="chevron-forward" size={16} color={theme.textSecondary} />
+              </View>
+            </Pressable>
+          )}
 
           <StatGrid>
             <StatCard
               label="Pending payout"
               value={formatJmd(pendingAmount)}
-              hint={`${unpaidCount} unpaid ${unpaidCount === 1 ? 'delivery' : 'deliveries'}`}
+              hint={`${unpaidCount} unpaid`}
               icon="hourglass-outline"
               accent="primary"
             />
             <StatCard
               label="Paid out"
               value={formatJmd(paidAmount)}
-              hint="Total transferred"
+              hint="Transferred"
               icon="checkmark-circle-outline"
               accent="partner"
             />
-            <StatCard
-              label="Total trips"
-              value={`${earnings?.totalDeliveries ?? 0}`}
-              hint="Completed deliveries"
-              icon="navigate-outline"
-              accent="default"
-            />
           </StatGrid>
-
-          <Pressable
-            onPress={() => router.push('/purchase')}
-            style={[styles.floatCta, { backgroundColor: theme.backgroundElement, borderColor: theme.border }]}>
-            <View style={[styles.tripIcon, { backgroundColor: theme.primarySoft }]}>
-              <Ionicons name="wallet-outline" size={18} color={theme.primary} />
-            </View>
-            <View style={{ flex: 1 }}>
-              <ThemedText style={styles.historyId}>Driver float & purchases</ThemedText>
-              <ThemedText type="small" themeColor="textSecondary">
-                Log fuel / expenses · see expected cash to return
-              </ThemedText>
-            </View>
-            <Ionicons name="chevron-forward" size={16} color={theme.textSecondary} />
-          </Pressable>
-
-          <SectionCard
-            title="How you were paid"
-            subtitle="Earnings count once the payment is settled">
-            <View style={styles.splitRow}>
-              <View style={styles.splitCol}>
-                <View style={styles.splitHead}>
-                  <Ionicons name="cash-outline" size={16} color={theme.primary} />
-                  <ThemedText style={styles.splitLabel}>Cash (COD)</ThemedText>
-                </View>
-                <ThemedText style={styles.splitValue}>{formatJmd(cash?.grossEarnings)}</ThemedText>
-                <ThemedText type="small" themeColor="textSecondary">
-                  {cash?.deliveryCount ?? 0} {cash?.deliveryCount === 1 ? 'trip' : 'trips'}
-                </ThemedText>
-              </View>
-              <View style={[styles.splitDivider, { backgroundColor: theme.border }]} />
-              <View style={styles.splitCol}>
-                <View style={styles.splitHead}>
-                  <Ionicons name="card-outline" size={16} color={theme.partner} />
-                  <ThemedText style={styles.splitLabel}>Online / bank</ThemedText>
-                </View>
-                <ThemedText style={styles.splitValue}>{formatJmd(online?.grossEarnings)}</ThemedText>
-                <ThemedText type="small" themeColor="textSecondary">
-                  {online?.deliveryCount ?? 0} {online?.deliveryCount === 1 ? 'trip' : 'trips'}
-                </ThemedText>
-              </View>
-            </View>
-
-            {summary?.breakdown ? (
-              <ThemedText type="small" themeColor="textSecondary" style={styles.splitFooter}>
-                {formatJmd(summary.breakdown.deliveryFees)} delivery fees ·{' '}
-                {formatJmd(summary.breakdown.tips)} tips
-              </ThemedText>
-            ) : null}
-
-            {cash?.cashToRemit ? (
-              <View style={[styles.noticeRow, { backgroundColor: theme.primarySoft }]}>
-                <Ionicons name="wallet-outline" size={16} color={theme.primary} />
-                <ThemedText type="small" style={{ color: theme.primary, flex: 1 }}>
-                  {formatJmd(cash.cashToRemit)} cash in hand to hand over at shift end
-                </ThemedText>
-              </View>
-            ) : null}
-
-            {awaiting?.grossEarnings ? (
-              <View style={[styles.noticeRow, { backgroundColor: 'rgba(245,158,11,0.12)' }]}>
-                <Ionicons name="time-outline" size={16} color={theme.warning} />
-                <ThemedText type="small" style={{ color: theme.warning, flex: 1 }}>
-                  {formatJmd(awaiting.grossEarnings)} from {awaiting.deliveryCount}{' '}
-                  {awaiting.deliveryCount === 1 ? 'delivery' : 'deliveries'} unlocks once the payment
-                  is verified
-                </ThemedText>
-              </View>
-            ) : null}
-          </SectionCard>
-
-
 
           <SectionCard title="Recent deliveries" subtitle="Last 30 completed trips" noPadding>
             {historyQ.isLoading ? (
@@ -302,54 +274,8 @@ export default function EarningsScreen() {
             )}
           </SectionCard>
 
-          <SectionCard title="Your purchases" subtitle="Shift purchase requests" noPadding>
-            {purchases.length === 0 ? (
-              <View style={styles.empty}>
-                <Ionicons name="receipt-outline" size={32} color={theme.textSecondary} />
-                <ThemedText style={styles.emptyTitle}>No purchases logged</ThemedText>
-                <ThemedText type="small" themeColor="textSecondary" style={styles.emptySub}>
-                  No purchases logged on this shift yet.
-                </ThemedText>
-              </View>
-            ) : (
-              purchases.map((p, i) => (
-                <View
-                  key={p.id}
-                  style={[
-                    styles.historyRow,
-                    i < purchases.length - 1 && { borderBottomWidth: 1, borderBottomColor: theme.border },
-                  ]}>
-                  <View style={[styles.tripIcon, { backgroundColor: theme.primarySoft }]}>
-                    <Ionicons name="cart-outline" size={18} color={theme.primary} />
-                  </View>
-                  <View style={styles.historyLeft}>
-                    <ThemedText style={styles.historyId}>
-                      {String(p.category).replace(/_/g, ' ')}
-                    </ThemedText>
-                    {p.note ? (
-                      <ThemedText type="small" themeColor="textSecondary" numberOfLines={2}>
-                        {p.note}
-                      </ThemedText>
-                    ) : null}
-                    {p.rejectReason ? (
-                      <ThemedText type="small" style={{ color: theme.danger }}>
-                        {p.rejectReason}
-                      </ThemedText>
-                    ) : null}
-                  </View>
-                  <View style={{ alignItems: 'flex-end', gap: 2 }}>
-                    <ThemedText style={styles.historyEarn}>{formatJmd(p.amount)}</ThemedText>
-                    <ThemedText type="small" style={{ color: statusColor(p.status, theme), fontFamily: Fonts.bold }}>
-                      {p.status}
-                    </ThemedText>
-                  </View>
-                </View>
-              ))
-            )}
-          </SectionCard>
-
           {payouts.length > 0 ? (
-            <SectionCard title="Payout history" subtitle="Completed transfers" noPadding>
+            <SectionCard title="Payout history" subtitle="Transfers from admin" noPadding>
               {payouts.map((p, i) => (
                 <View
                   key={p._id}
@@ -387,29 +313,22 @@ const styles = StyleSheet.create({
     paddingHorizontal: Layout.screenPadding,
     paddingBottom: Spacing.four,
   },
-  withdrawBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: Spacing.two,
-    marginBottom: Spacing.three,
-    borderRadius: Layout.cardRadius,
-    paddingVertical: 14,
-  },
-  withdrawBtnText: {
-    color: '#fff',
-    fontFamily: Fonts.bold,
-    fontSize: 15,
-  },
-  floatCta: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.two,
+  floatCard: {
     borderWidth: 1,
     borderRadius: Layout.cardRadius,
     padding: Spacing.three,
     marginBottom: Spacing.three,
   },
+  floatHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: Spacing.two,
+    marginBottom: Spacing.two,
+  },
+  floatRow: { flexDirection: 'row', gap: Spacing.two },
+  floatCol: { flex: 1, gap: 2 },
+  floatValue: { fontSize: 15, fontFamily: Fonts.extraBold },
   historyRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -428,22 +347,6 @@ const styles = StyleSheet.create({
   historyRight: { alignItems: 'flex-end' },
   historyId: { fontSize: 14, fontFamily: Fonts.bold },
   historyEarn: { fontSize: 15, fontFamily: Fonts.extraBold },
-  splitRow: { flexDirection: 'row', alignItems: 'stretch' },
-  splitCol: { flex: 1, gap: 4 },
-  splitHead: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  splitLabel: { fontSize: 12, fontFamily: Fonts.bold },
-  splitValue: { fontSize: 18, fontFamily: Fonts.extraBold, marginTop: 2 },
-  splitDivider: { width: 1, marginHorizontal: Spacing.two },
-  splitFooter: { marginTop: Spacing.three },
-  noticeRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.two,
-    marginTop: Spacing.two,
-    borderRadius: 12,
-    paddingHorizontal: Spacing.two,
-    paddingVertical: 10,
-  },
   empty: {
     padding: Spacing.five,
     alignItems: 'center',

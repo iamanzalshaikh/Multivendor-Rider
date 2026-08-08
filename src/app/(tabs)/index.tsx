@@ -1,6 +1,6 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
-import { memo, useCallback, useEffect } from 'react';
+import { useCallback, useEffect } from 'react';
 import {
   View,
   StyleSheet,
@@ -31,6 +31,7 @@ import {
   useEarningsSummaryQuery,
   useRiderEarningsQuery,
   useRiderOrderCache,
+  useShiftPurchasesQuery,
   prefetchRiderOrder,
 } from '@/hooks/queries/rider';
 import { invalidateAvailableOrders, invalidateRiderProfile } from '@/lib/riderQueryInvalidation';
@@ -41,33 +42,6 @@ import { formatJmd, riderEarningForOrder } from '@/lib/money';
 import { updateRiderOnlineStatus } from '@/services/riders';
 import { useRiderStore } from '@/stores/riderStore';
 import type { VerificationStatus } from '@/types/rider';
-
-const QuickAction = memo(function QuickAction({
-  label,
-  hint,
-  icon,
-  onPress,
-}: {
-  label: string;
-  hint: string;
-  icon: keyof typeof Ionicons.glyphMap;
-  onPress: () => void;
-}) {
-  const theme = useTheme();
-  return (
-    <Pressable
-      onPress={onPress}
-      style={[styles.actionBtn, cardStyle, { backgroundColor: theme.backgroundElement }]}>
-      <View style={[styles.actionIcon, { backgroundColor: theme.primarySoft }]}>
-        <Ionicons name={icon} size={18} color={theme.primary} />
-      </View>
-      <ThemedText style={styles.actionLabel}>{label}</ThemedText>
-      <ThemedText type="small" themeColor="textSecondary">
-        {hint}
-      </ThemedText>
-    </Pressable>
-  );
-});
 
 function SectionHeader({ title, action }: { title: string; action?: ReactNode }) {
   return (
@@ -97,6 +71,7 @@ export default function HomeScreen() {
   const earningsQ = useRiderEarningsQuery();
   const summaryQ = useEarningsSummaryQuery();
   const historyQ = useDeliveryHistoryQuery(1, 5, true);
+  const shiftQ = useShiftPurchasesQuery(true);
 
   const currentRider = profileRider ?? rider;
   const profileImage = user?.profileImage ?? profileRider?.profileImage;
@@ -124,8 +99,12 @@ export default function HomeScreen() {
   const earnings = earningsQ.data;
   const summary = summaryQ.data;
   const online = onlineStatus;
+  const shift = shiftQ.data?.shift;
   const refreshing =
-    earningsQ.isRefetching || summaryQ.isRefetching || historyQ.isRefetching;
+    earningsQ.isRefetching ||
+    summaryQ.isRefetching ||
+    historyQ.isRefetching ||
+    shiftQ.isRefetching;
 
   const fullName = user?.fullName ?? '';
   const greeting = fullName
@@ -169,6 +148,7 @@ export default function HomeScreen() {
             earningsQ.refetch();
             summaryQ.refetch();
             historyQ.refetch();
+            shiftQ.refetch();
             if (activeOrderId) activeOrderQ.refetch();
           }}
         />
@@ -284,6 +264,43 @@ export default function HomeScreen() {
           ]}
         />
 
+        {shift ? (
+          <Pressable
+            onPress={() => router.push('/purchase')}
+            style={[styles.floatCard, cardStyle, { backgroundColor: theme.backgroundElement, borderColor: theme.border }]}>
+            <View style={styles.floatHeader}>
+              <ThemedText style={styles.floatTitle}>Today&apos;s float</ThemedText>
+              <ThemedText type="link" style={{ fontSize: 12 }}>
+                Details
+              </ThemedText>
+            </View>
+            <View style={styles.floatRow}>
+              <View style={styles.floatCol}>
+                <ThemedText type="small" themeColor="textSecondary">
+                  Opening
+                </ThemedText>
+                <ThemedText style={styles.floatValue}>{formatJmd(shift.floatIssued)}</ThemedText>
+              </View>
+              <View style={styles.floatCol}>
+                <ThemedText type="small" themeColor="textSecondary">
+                  You keep
+                </ThemedText>
+                <ThemedText style={[styles.floatValue, { color: theme.partner }]}>
+                  {formatJmd(shift.riderKeep)}
+                </ThemedText>
+              </View>
+              <View style={styles.floatCol}>
+                <ThemedText type="small" themeColor="textSecondary">
+                  Return
+                </ThemedText>
+                <ThemedText style={[styles.floatValue, { color: theme.primary }]}>
+                  {formatJmd(shift.expectedCashReturn)}
+                </ThemedText>
+              </View>
+            </View>
+          </Pressable>
+        ) : null}
+
         <StatGrid>
           <StatCard
             label="Pending payout"
@@ -298,20 +315,6 @@ export default function HomeScreen() {
             hint="Transferred"
             icon="checkmark-circle-outline"
             accent="partner"
-          />
-          <StatCard
-            label="Avg per delivery"
-            value={formatJmd(summary?.earningPerDelivery)}
-            hint="Delivery fee + tips"
-            icon="bicycle-outline"
-            accent="default"
-          />
-          <StatCard
-            label="Account"
-            value={isApproved ? 'Approved' : verificationStatus === 'rejected' ? 'Rejected' : 'Pending'}
-            hint="Admin verification"
-            icon="shield-checkmark-outline"
-            accent={isApproved ? 'partner' : verificationStatus === 'rejected' ? 'warning' : 'primary'}
           />
         </StatGrid>
 
@@ -353,30 +356,6 @@ export default function HomeScreen() {
             </Pressable>
           </View>
         ) : null}
-
-        <View style={styles.section}>
-          <SectionHeader title="Quick actions" />
-          <View style={styles.actionsRow}>
-            <QuickAction
-              label="Jobs"
-              hint="Accept deliveries"
-              icon="briefcase-outline"
-              onPress={() => router.push('/(tabs)/jobs')}
-            />
-            <QuickAction
-              label="Trip"
-              hint="Active delivery"
-              icon="navigate-outline"
-              onPress={() => router.push('/(tabs)/orders')}
-            />
-            <QuickAction
-              label="Earnings"
-              hint="Payouts"
-              icon="wallet-outline"
-              onPress={() => router.push('/(tabs)/earnings')}
-            />
-          </View>
-        </View>
 
         <SectionCard
           title="Recent deliveries"
@@ -611,6 +590,21 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.two,
   },
   sectionTitle: { fontSize: 14, fontFamily: Fonts.extraBold },
+  floatCard: {
+    borderWidth: 1,
+    padding: Spacing.three,
+    marginBottom: Spacing.three,
+  },
+  floatHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: Spacing.two,
+  },
+  floatTitle: { fontSize: 14, fontFamily: Fonts.extraBold },
+  floatRow: { flexDirection: 'row', gap: Spacing.two },
+  floatCol: { flex: 1, gap: 2 },
+  floatValue: { fontSize: 15, fontFamily: Fonts.extraBold },
   activeBanner: { padding: Spacing.three },
   activeTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   activeOrderId: { fontSize: 18, fontFamily: Fonts.extraBold },
@@ -621,23 +615,6 @@ const styles = StyleSheet.create({
     fontFamily: Fonts.bold,
     textTransform: 'uppercase',
   },
-  actionsRow: { flexDirection: 'row', gap: Spacing.two },
-  actionBtn: {
-    flex: 1,
-    padding: Spacing.two,
-    minHeight: 88,
-    justifyContent: 'flex-start',
-    gap: 4,
-  },
-  actionIcon: {
-    width: 32,
-    height: 32,
-    borderRadius: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 2,
-  },
-  actionLabel: { fontSize: 13, fontFamily: Fonts.extraBold },
   listRow: {
     flexDirection: 'row',
     alignItems: 'center',
