@@ -1,6 +1,6 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
-import { useCallback, useEffect } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
   View,
   StyleSheet,
@@ -39,6 +39,7 @@ import { useUnreadNotificationCount } from '@/hooks/use-unread-notifications';
 import { hasUploadedImage } from '@/lib/imageUtils';
 import { emitRiderOnlineStatus } from '@/lib/riderSocketActions';
 import { formatJmd, riderEarningForOrder } from '@/lib/money';
+import { countPendingCashSessions, syncPendingCashSessions } from '@/lib/offlineCashQueue';
 import { updateRiderOnlineStatus } from '@/services/riders';
 import { useRiderStore } from '@/stores/riderStore';
 import type { VerificationStatus } from '@/types/rider';
@@ -72,6 +73,14 @@ export default function HomeScreen() {
   const summaryQ = useEarningsSummaryQuery();
   const historyQ = useDeliveryHistoryQuery(1, 5, true);
   const shiftQ = useShiftPurchasesQuery(true);
+  const [pendingSync, setPendingSync] = useState(0);
+
+  useEffect(() => {
+    void (async () => {
+      await syncPendingCashSessions();
+      setPendingSync(await countPendingCashSessions());
+    })();
+  }, []);
 
   const currentRider = profileRider ?? rider;
   const profileImage = user?.profileImage ?? profileRider?.profileImage;
@@ -253,6 +262,15 @@ export default function HomeScreen() {
         </Pressable>
 
         <VerificationBanner status={verificationStatus as VerificationStatus} />
+
+        {pendingSync > 0 ? (
+          <View style={[styles.syncBanner, { backgroundColor: theme.warningSoft, borderColor: theme.warning }]}>
+            <Ionicons name="cloud-upload-outline" size={18} color={theme.warning} />
+            <ThemedText style={{ flex: 1, color: theme.warning }}>
+              {pendingSync} offline payment{pendingSync > 1 ? 's' : ''} pending sync
+            </ThemedText>
+          </View>
+        ) : null}
 
         <EarningsHeroCard
           todayAmount={earnings?.todayEarnings ?? 0}
@@ -450,6 +468,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: Spacing.two,
+  },
+  syncBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    padding: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    marginBottom: Spacing.two,
   },
   onlineCardLeft: {
     flex: 1,

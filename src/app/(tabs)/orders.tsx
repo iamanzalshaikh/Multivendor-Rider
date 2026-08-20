@@ -73,6 +73,13 @@ export default function TripScreen() {
       if (action === 'start' || action === 'arrived') {
         return markArrived(orderId);
       }
+      // COD complete is handled via /order/payment — never call complete here.
+      if (action === 'complete') {
+        const method = String(activeOrderQ.data?.paymentMethod ?? '').toUpperCase();
+        if (method === 'COD') {
+          throw new Error('Open Collect & deliver to record cash and get customer confirmation');
+        }
+      }
       return completeDelivery(orderId);
     },
     onMutate: async ({ orderId, action }) => {

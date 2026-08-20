@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import * as Location from 'expo-location';
 
+import { V1_LIVE_LOCATION_ENABLED } from '@/hooks/use-rider-location';
 import { updateRiderLocation } from '@/services/riders';
 
 const ACTIVE_STATUSES = new Set([
@@ -10,9 +11,10 @@ const ACTIVE_STATUSES = new Set([
   'READY_FOR_PICKUP',
 ]);
 
-/** Sends GPS to backend while rider views an active delivery (Zomato-style live dot). */
+/** Sends GPS to backend while rider views an active delivery. Disabled while live map is off. */
 export function useOrderLocationPing(orderStatus?: string) {
   useEffect(() => {
+    if (!V1_LIVE_LOCATION_ENABLED) return;
     if (!orderStatus || !ACTIVE_STATUSES.has(orderStatus)) return;
 
     let sub: Location.LocationSubscription | null = null;

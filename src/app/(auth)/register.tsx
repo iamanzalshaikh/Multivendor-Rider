@@ -54,7 +54,6 @@ export default function RegisterScreen() {
   const [aadhaarCardUri, setAadhaarCardUri] = useState('');
   const [accountHolderName, setAccountHolderName] = useState('');
   const [accountNumber, setAccountNumber] = useState('');
-  const [ifscCode, setIfscCode] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -95,18 +94,11 @@ export default function RegisterScreen() {
       }
     }
     if (currentStep === 2) {
-      if (!drivingLicenseUri || !aadhaarCardUri) {
-        setError('Step 2: Driving license and Aadhaar photos are required');
-        return false;
-      }
+      // KYC is optional
     }
     if (currentStep === 3) {
-      if (!accountHolderName.trim() || !accountNumber.trim() || !ifscCode.trim()) {
-        setError('Step 3: Bank holder name, account number and IFSC are required');
-        return false;
-      }
-      if (!/^[A-Z]{4}0[A-Z0-9]{6}$/i.test(ifscCode.trim())) {
-        setError('Step 3: Please enter a valid IFSC code (example: SBIN0001234)');
+      if (!accountHolderName.trim() || !accountNumber.trim()) {
+        setError('Step 3: Bank holder name and account number are required');
         return false;
       }
     }
@@ -140,7 +132,6 @@ export default function RegisterScreen() {
         bankAccountDetails: {
           accountHolderName: accountHolderName.trim(),
           accountNumber: accountNumber.trim(),
-          ifscCode: ifscCode.trim().toUpperCase(),
         },
       });
 
@@ -310,7 +301,7 @@ export default function RegisterScreen() {
                 </View>
               </View>
               <View style={styles.docCard}>
-                <ThemedText style={styles.docHeading}>Driving License *</ThemedText>
+                <ThemedText style={styles.docHeading}>Driving License (optional)</ThemedText>
                 <View style={styles.docActionsRow}>
                   <Pressable
                     style={[styles.docButton, { borderColor: theme.border }]}
@@ -327,7 +318,7 @@ export default function RegisterScreen() {
                 </View>
               </View>
               <View style={styles.docCard}>
-                <ThemedText style={styles.docHeading}>Aadhaar card *</ThemedText>
+                <ThemedText style={styles.docHeading}>Aadhaar card (optional)</ThemedText>
                 <View style={styles.docActionsRow}>
                   <Pressable
                     style={[styles.docButton, { borderColor: theme.border }]}
@@ -360,7 +351,6 @@ export default function RegisterScreen() {
                 [
                   ['accountHolder', 'Account holder name', accountHolderName, setAccountHolderName, 'words', 'default'],
                   ['accountNumber', 'Account number', accountNumber, setAccountNumber, 'none', 'number-pad'],
-                  ['ifsc', 'IFSC code', ifscCode, setIfscCode, 'characters', 'default'],
                 ] as const
               ).map(([fieldKey, label, value, setter, capitalize, keyboard]) => (
                 <View
@@ -378,7 +368,7 @@ export default function RegisterScreen() {
                     onChangeText={setter}
                     autoCapitalize={capitalize}
                     keyboardType={keyboard}
-                    placeholder={fieldKey === 'ifsc' ? 'SBIN0001234' : undefined}
+                    placeholder={undefined}
                     placeholderTextColor={theme.textSecondary}
                     onFocus={() => scrollToField(fieldKey)}
                     style={[

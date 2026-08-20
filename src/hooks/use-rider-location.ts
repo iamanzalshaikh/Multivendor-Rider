@@ -6,6 +6,9 @@ import {
   RIDER_LOCATION_TASK,
 } from '@/tasks/riderLocationTask';
 
+/** Live GPS broadcast is off for now — status updates only. */
+export const V1_LIVE_LOCATION_ENABLED = false;
+
 async function safeStopBackgroundLocation(): Promise<void> {
   try {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -18,15 +21,18 @@ async function safeStopBackgroundLocation(): Promise<void> {
   }
 }
 
+/**
+ * When enabled, starts background GPS for active trips.
+ * Currently hard-disabled — always stops any leftover foreground-service notification.
+ */
 export function useRiderLocationTracking(enabled: boolean) {
   useEffect(() => {
     let alive = true;
 
     (async () => {
-      if (!enabled) {
-        await safeStopBackgroundLocation();
-        return;
-      }
+      // Always tear down leftover tracking (old builds left the orange notification).
+      await safeStopBackgroundLocation();
+      if (!V1_LIVE_LOCATION_ENABLED || !enabled || !alive) return;
 
       ensureRiderLocationTaskRegistered();
 
@@ -48,7 +54,7 @@ export function useRiderLocationTracking(enabled: boolean) {
         showsBackgroundLocationIndicator: true,
         foregroundService: {
           notificationTitle: 'SD Services Rider',
-          notificationBody: 'Tracking location for your active delivery',
+          notificationBody: 'On an active delivery',
           notificationColor: '#ff5a00',
         },
       });

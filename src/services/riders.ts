@@ -25,7 +25,7 @@ export async function registerRider(input: {
   bankAccountDetails?: {
     accountHolderName: string;
     accountNumber: string;
-    ifscCode: string;
+    ifscCode?: string;
   };
 }) {
   if (input.drivingLicenseUri && input.aadhaarCardUri) {
@@ -193,7 +193,6 @@ export async function completeDelivery(orderId: string) {
     { method: 'PATCH', body: JSON.stringify({}) },
   );
   const data = body.data;
-  // Backend returns { orderId, commission } — normalize to a completed RiderOrder stub
   if (data && typeof data === 'object' && 'orderId' in data && !('_id' in data && (data as RiderOrder)._id)) {
     const earned = Number((data as { commission?: number }).commission ?? 0);
     return {
@@ -204,6 +203,34 @@ export async function completeDelivery(orderId: string) {
     } satisfies RiderOrder;
   }
   return asRiderOrder(data, orderId);
+}
+
+export type CashPaymentSessionPayload = {
+  orderId: string;
+  amountReceived: number;
+  changeReturned?: number;
+  offlineId?: string;
+  idempotencyKey?: string;
+};
+
+export async function createCashPaymentSession(input: CashPaymentSessionPayload) {
+  const body = await apiFetch('/case/cash-sessions', {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
+  return (body as ApiEnvelope<unknown>).data;
+}
+
+export async function createTopUpSession(input: {
+  customerId: string;
+  amountReceived: number;
+  offlineId?: string;
+}) {
+  const body = await apiFetch('/case/cash-sessions/top-up', {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
+  return (body as ApiEnvelope<unknown>).data;
 }
 
 export async function fetchRiderEarnings() {
@@ -318,6 +345,10 @@ export type RiderShiftSummary = {
   commissionEarned: number;
   riderKeep: number;
   expectedCashReturn: number;
+  walletAdjustments?: number;
+  overpaymentsHeld?: number;
+  underpaymentsShort?: number;
+  walletCreditsApplied?: number;
   deliveriesCompleted: number;
   startedAt: string;
   endedAt?: string | null;
@@ -348,5 +379,24 @@ export async function logShiftPurchase(input: {
     method: 'POST',
     body: JSON.stringify(input),
   });
+  return body.data!;
+}
+
+export type RiderReviewItem = {
+  id?: string;
+  _id?: string;
+  rating?: number;
+  riderRating?: number;
+  comment?: string | null;
+  reviewText?: string | null;
+  customerName?: string;
+  orderNumber?: string;
+  createdAt?: string;
+};
+
+export async function fetchMyRiderReviews() {
+  const body = await apiFetch<
+    ApiEnvelope<{ items: RiderReviewItem[]; total: number; page: number; totalPages: number }>
+  >('/riders/me/reviews');
   return body.data!;
 }

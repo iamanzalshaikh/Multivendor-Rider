@@ -40,6 +40,7 @@ export function useRiderSocket(enabled: boolean) {
     }
 
     let alive = true;
+    let onReconnect: (() => void) | null = null;
 
     const onDeliveryAvailable = (payload: DeliveryAvailablePayload) => {
       const rider = useRiderStore.getState().rider;
@@ -57,8 +58,10 @@ export function useRiderSocket(enabled: boolean) {
         acceptTimeoutSeconds: payload.acceptTimeoutSeconds,
       });
       void alertNewDeliveryOffer({
+        orderId: payload.orderId,
         orderNumber: payload.orderNumber,
         restaurantName: payload.restaurantName ?? 'Restaurant',
+        grandTotal: payload.grandTotal,
       });
       void qc.invalidateQueries({ queryKey: ['notifications', 'unread-count'] });
       invalidateAvailableOrders(qc);
@@ -75,7 +78,6 @@ export function useRiderSocket(enabled: boolean) {
 
     const refreshHandlers = REFRESH_EVENTS.map((event) => {
       const handler = (payload: OrderSocketPayload = {}) => {
-        // Instant UI — don't wait for the HTTP refetch (payment verify felt ~1 min).
         patchRiderOrderFromSocket(qc, payload);
         invalidateAfterSocketOrderEvent(qc, event, payload.orderId);
       };
@@ -86,6 +88,11 @@ export function useRiderSocket(enabled: boolean) {
       try {
         const s = await connectSocket();
         if (!alive) return;
+
+        onReconnect = () => {
+          if (alive) void emitRiderOnlineStatus(true);
+        };
+        s.on('connect', onReconnect);
 
         await emitRiderOnlineStatus(true);
 
@@ -102,6 +109,7 @@ export function useRiderSocket(enabled: boolean) {
       void emitRiderOnlineStatus(false);
       const sock = getSocketInstance();
       if (sock) {
+        if (onReconnect) sock.off('connect', onReconnect);
         sock.off(ServerSocketEvents.DELIVERY_AVAILABLE, onDeliveryAvailable);
         sock.off(ServerSocketEvents.DELIVERY_CLAIMED, onDeliveryClaimed);
         refreshHandlers.forEach(({ event, handler }) => sock.off(event, handler));

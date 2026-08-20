@@ -7,6 +7,9 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { isAndroidEmulator } from '@/lib/device';
 import { registerDeviceToken, unregisterDeviceToken } from '@/services/notifications';
 import { queryClient } from '@/lib/queryClient';
+import { invalidateAvailableOrders } from '@/lib/riderQueryInvalidation';
+import { useDeliveryOfferStore } from '@/stores/deliveryOfferStore';
+import { useRiderStore } from '@/stores/riderStore';
 
 const PUSH_TOKEN_TIMEOUT_MS = 8000;
 
@@ -84,6 +87,7 @@ export async function registerForPushNotifications(): Promise<string | null> {
         importance: Notifications.AndroidImportance.MAX,
         vibrationPattern: [0, 400, 200, 400],
         lightColor: '#ff5a00',
+        enableVibrate: true,
       });
     }
 
@@ -107,8 +111,24 @@ export async function unregisterForPushNotifications(): Promise<void> {
 }
 
 export function setupNotificationListeners() {
-  const foregroundSubscription = Notifications.addNotificationReceivedListener(() => {
+  const foregroundSubscription = Notifications.addNotificationReceivedListener((notification) => {
     void queryClient.invalidateQueries({ queryKey: ['notifications', 'unread-count'] });
+
+    const data = notification.request.content.data as Record<string, unknown>;
+    if (data?.type !== 'delivery_available' || !data.orderId) return;
+
+    const rider = useRiderStore.getState().rider;
+    if (rider?.currentOrderId) return;
+
+    useDeliveryOfferStore.getState().showOffer({
+      orderId: String(data.orderId),
+      orderNumber: String(data.orderNumber ?? ''),
+      restaurantName: String(data.restaurantName ?? 'Restaurant'),
+      grandTotal: Number(data.grandTotal ?? 0),
+      riderEarning: Number(data.riderEarning ?? 0),
+    });
+    invalidateAvailableOrders(queryClient);
+    Vibration.vibrate([0, 350, 120, 350]);
   });
 
   const responseSubscription = Notifications.addNotificationResponseReceivedListener((response) => {
@@ -133,8 +153,10 @@ export function handleNotificationTap(data: Record<string, unknown>) {
 
 /** Foreground alert when a socket delivery offer arrives */
 export async function alertNewDeliveryOffer(input: {
+  orderId?: string;
   orderNumber: string;
   restaurantName: string;
+  grandTotal?: number;
 }) {
   Vibration.vibrate([0, 350, 120, 350]);
 
@@ -143,8 +165,16 @@ export async function alertNewDeliveryOffer(input: {
       title: 'New delivery',
       body: `#${input.orderNumber} · ${input.restaurantName}`,
       priority: Notifications.AndroidNotificationPriority.MAX,
-      data: { type: 'delivery_available' },
-      ...(Platform.OS === 'ios' ? { sound: 'default' } : { channelId: 'delivery' }),
+      data: {
+        type: 'delivery_available',
+        orderId: input.orderId,
+        orderNumber: input.orderNumber,
+        restaurantName: input.restaurantName,
+        grandTotal: input.grandTotal != null ? String(input.grandTotal) : undefined,
+      },
+      ...(Platform.OS === 'android'
+        ? { channelId: 'delivery' }
+        : { sound: true }),
     },
     trigger: null,
   });

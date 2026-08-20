@@ -172,6 +172,19 @@ export default function ProfileScreen() {
           </View>
 
           <Pressable
+            onPress={() => router.push('/profile/ratings' as never)}
+            style={[styles.actionCard, cardStyle, { backgroundColor: theme.backgroundElement }]}>
+            <Ionicons name="star-outline" size={22} color="#FBBF24" />
+            <View style={styles.actionText}>
+              <ThemedText style={styles.actionTitle}>Customer ratings</ThemedText>
+              <ThemedText type="small" themeColor="textSecondary">
+                See who rated you and their comments
+              </ThemedText>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={theme.textSecondary} />
+          </Pressable>
+
+          <Pressable
             onPress={() => router.push('/notifications' as never)}
             style={[styles.actionCard, cardStyle, { backgroundColor: theme.backgroundElement }]}>
             <Ionicons name="notifications-outline" size={22} color={theme.primary} />

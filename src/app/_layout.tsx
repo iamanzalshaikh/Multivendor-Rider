@@ -18,7 +18,6 @@ import {
 
 import { Brand } from '@/constants/theme';
 import { queryClient } from '@/lib/queryClient';
-import { ensureRiderLocationTaskRegistered } from '@/tasks/riderLocationTask';
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
@@ -33,10 +32,6 @@ export default function RootLayout() {
   });
 
   const fontsReady = fontsLoaded || Boolean(fontError);
-
-  useEffect(() => {
-    ensureRiderLocationTaskRegistered();
-  }, []);
 
   useEffect(() => {
     if (fontsReady) {
