@@ -53,7 +53,7 @@ import {
   rejectOrder,
   startDelivery,
 } from '@/services/riders';
-import { formatJmd, riderEarningForOrder } from '@/lib/money';
+import { formatCashDue, formatJmd, formatOrderTotal, riderEarningForOrder } from '@/lib/money';
 import { riderKeys } from '@/hooks/queries/keys';
 
 function resolveOrderId(raw: string | string[] | undefined): string | undefined {
@@ -261,7 +261,7 @@ export default function OrderDetailScreen() {
 
           <View style={[styles.totalsRow, { borderTopColor: theme.border }]}>
             <ThemedText style={styles.totalLabel}>Order total</ThemedText>
-            <ThemedText style={styles.totalValue}>{formatJmd(order.grandTotal)}</ThemedText>
+            <ThemedText style={styles.totalValue}>{formatOrderTotal(order)}</ThemedText>
           </View>
           <View style={styles.totalsRow}>
             <ThemedText type="small" themeColor="textSecondary">
@@ -285,7 +285,8 @@ export default function OrderDetailScreen() {
             <View style={[styles.codRow, { backgroundColor: theme.primarySoft }]}>
               <Ionicons name="cash-outline" size={16} color={theme.primary} />
               <ThemedText style={[styles.codText, { color: theme.primary }]}>
-                Collect {formatJmd(order.grandTotal)} cash on delivery
+                Collect {formatCashDue(order as never)} cash on delivery
+                {order.payInUsd ? ' (USD)' : ''}
               </ThemedText>
             </View>
           ) : (
@@ -325,7 +326,13 @@ export default function OrderDetailScreen() {
               label={actionButtonLabel(next, order)}
               busy={actionMut.isPending}
               disabled={actionMut.isPending}
-              onConfirm={() => actionMut.mutate(next)}
+              onConfirm={() => {
+                if (next === 'complete' && order.paymentMethod === 'COD') {
+                  router.push(`/order/payment/${orderId}` as never);
+                  return;
+                }
+                actionMut.mutate(next);
+              }}
             />
           ) : null}
         </View>

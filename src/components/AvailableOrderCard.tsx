@@ -15,7 +15,7 @@ import {
   itemCount,
   orderDisplayId,
 } from '@/lib/orderDisplay';
-import { formatJmd, riderEarningForOrder } from '@/lib/money';
+import { formatJmd, formatOrderTotal, riderEarningForOrder } from '@/lib/money';
 import type { RiderOrder } from '@/types/rider';
 
 type Props = {
@@ -84,7 +84,7 @@ export const AvailableOrderCard = memo(function AvailableOrderCard({ order, busy
 
       <View style={[styles.footerRow, { borderTopColor: theme.border }]}>
         <ThemedText type="small" themeColor="textSecondary" style={styles.metaLine}>
-          {formatJmd(order.grandTotal)} · {items || '—'} items ·{' '}
+          {formatOrderTotal(order)} · {items || '—'} items ·{' '}
           {order.paymentMethod === 'COD' ? 'COD' : 'Online'}
         </ThemedText>
         <Pressable

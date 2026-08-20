@@ -46,7 +46,7 @@ export async function registerWithEmailPassword(input: {
   bankAccountDetails?: {
     accountHolderName: string;
     accountNumber: string;
-    ifscCode: string;
+    ifscCode?: string;
   };
 }) {
   const body = await registerRider(input);

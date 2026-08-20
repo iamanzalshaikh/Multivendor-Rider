@@ -2,6 +2,7 @@
   "expo": {
     "name": "SD Services Rider",
     "slug": "riderApp",
+    "description": "SD Services Rider — campus delivery partner app",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
@@ -70,9 +71,9 @@
       [
         "expo-location",
         {
-          "locationWhenInUsePermission": "SD Services Rider uses your location for delivery tracking and order assignment.",
-          "locationAlwaysAndWhenInUsePermission": "SD Services Rider uses your location while delivering, including in the background.",
-          "isAndroidForegroundServiceEnabled": true
+          "locationWhenInUsePermission": "SD Services Rider may use your location for delivery navigation.",
+          "locationAlwaysAndWhenInUsePermission": "SD Services Rider may use your location while on an active delivery.",
+          "isAndroidForegroundServiceEnabled": false
         }
       ],
       [

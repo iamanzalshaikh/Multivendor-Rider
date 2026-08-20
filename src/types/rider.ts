@@ -48,6 +48,12 @@ export type RiderOrder = {
   paymentMethod?: string;
   paymentStatus?: string;
   grandTotal: number;
+  totalUsd?: number | null;
+  usdRateSnapshot?: number | null;
+  payInUsd?: boolean;
+  cashDueUsd?: number | null;
+  cashDueAtDelivery?: number;
+  walletDeduction?: number;
   /** Rider's earning for this trip is the delivery fee plus any tip */
   deliveryFee?: number;
   tipAmount?: number;

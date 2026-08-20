@@ -196,6 +196,15 @@ export default function EarningsScreen() {
                 COD collected {formatJmd(shift.cashCollected)} · Purchases{' '}
                 {formatJmd(shift.cashSpentPurchases)}
               </ThemedText>
+              {(shift.overpaymentsHeld ?? 0) > 0 ||
+              (shift.underpaymentsShort ?? 0) > 0 ||
+              (shift.walletCreditsApplied ?? 0) > 0 ? (
+                <ThemedText type="small" themeColor="textSecondary" style={{ marginTop: 4 }}>
+                  Overpay held {formatJmd(shift.overpaymentsHeld ?? 0)} · Underpay short{' '}
+                  {formatJmd(shift.underpaymentsShort ?? 0)} · Wallet top-ups{' '}
+                  {formatJmd(shift.walletCreditsApplied ?? 0)}
+                </ThemedText>
+              ) : null}
             </Pressable>
           ) : (
             <Pressable

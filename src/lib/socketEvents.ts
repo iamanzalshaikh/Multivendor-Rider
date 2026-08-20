@@ -16,6 +16,9 @@ export const ServerSocketEvents = {
   ORDER_CANCELLED: 'order_cancelled',
   DELIVERY_AVAILABLE: 'delivery_available',
   DELIVERY_CLAIMED: 'delivery_claimed',
+  CASH_SESSION_CREATED: 'cash_session_created',
+  CASH_SESSION_CONFIRMED: 'cash_session_confirmed',
+  CASH_SESSION_DISPUTED: 'cash_session_disputed',
 } as const;
 
 export type OrderSocketPayload = {

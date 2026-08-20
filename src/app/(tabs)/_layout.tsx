@@ -27,7 +27,8 @@ export default function TabsLayout() {
 
   const activeOrderQ = useActiveOrderPolling(activeOrderId, online && hasActive);
   useClearStaleActiveTrip(activeOrderId, activeOrderQ.data?.orderStatus);
-  useRiderLocationTracking(online && hasActive);
+  // Live GPS broadcast disabled — still mounts to stop leftover foreground notifications.
+  useRiderLocationTracking(false);
   useRiderSocket(online);
   usePushNotifications(true);
 

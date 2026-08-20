@@ -4,9 +4,8 @@
  */
 import 'expo';
 
-// Register background task only after expo is imported (lazy require inside).
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-require('./src/tasks/riderLocationTask').scheduleRiderLocationTaskRegistration();
+// Live location task registration disabled — status updates only.
+// Re-enable with V1_LIVE_LOCATION_ENABLED + scheduleRiderLocationTaskRegistration().
 
 // Load router entry after Expo runtime bootstrap.
 // eslint-disable-next-line @typescript-eslint/no-require-imports

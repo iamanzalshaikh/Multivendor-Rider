@@ -3,13 +3,14 @@ import { Image, StyleSheet, Text, View, useColorScheme } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, { FadeIn, FadeInDown, ZoomIn } from 'react-native-reanimated';
 
+import { TypewriterText } from '@/components/TypewriterText';
 import { SD_TEXT_WHITE, SD_TEXT_BLACK } from '@/constants/splashAssets';
 
 export const SPLASH_TITLE = 'Scoots Delivery Services';
-/** Brand line fade-in */
-export const SPLASH_TYPE_MS = 900;
+/** ~45ms per character for typewriter */
+export const SPLASH_TYPE_MS = SPLASH_TITLE.length * 45;
 /** Pause after the full line is visible */
-export const SPLASH_HOLD_AFTER_MS = 800;
+export const SPLASH_HOLD_AFTER_MS = 900;
 /** Minimum splash duration = reveal + hold */
 export const SPLASH_MIN_MS = SPLASH_TYPE_MS + SPLASH_HOLD_AFTER_MS;
 
@@ -33,14 +34,12 @@ export default function SplashScreen() {
           <Animated.View entering={FadeIn.delay(100).duration(360)} style={styles.glowStreak} />
 
           <Animated.View entering={FadeInDown.delay(140).duration(360)} style={styles.textWrap}>
-            <Text
-              style={[styles.brandTitle, { color: titleColor }]}
-              numberOfLines={2}
-              adjustsFontSizeToFit
-              minimumFontScale={0.75}
-            >
-              {SPLASH_TITLE}
-            </Text>
+            <TypewriterText
+              text={SPLASH_TITLE}
+              color={titleColor}
+              charMs={45}
+              style={styles.brandTitle}
+            />
 
             <Text style={[styles.portalBadge, { color: '#FF5A00' }]}>Rider Portal</Text>
 
@@ -102,7 +101,6 @@ const styles = StyleSheet.create({
     letterSpacing: -0.3,
     lineHeight: 30,
     marginBottom: 8,
-    width: '100%',
   },
   portalBadge: {
     fontSize: 13,
@@ -111,6 +109,7 @@ const styles = StyleSheet.create({
     letterSpacing: 1.2,
     textTransform: 'uppercase',
     marginBottom: 10,
+    marginTop: 8,
   },
   tagline: {
     fontSize: 14,

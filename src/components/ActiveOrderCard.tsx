@@ -18,7 +18,7 @@ import { cardStyle, Layout } from '@/constants/layout';
 import { Fonts, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { prefetchRiderOrder } from '@/hooks/queries/rider';
-import { formatJmd, riderEarningForOrder } from '@/lib/money';
+import { formatJmd, formatUsd, riderEarningForOrder } from '@/lib/money';
 import { formatDeliveryAddress, formatRestaurantAddress, orderDisplayId } from '@/lib/orderDisplay';
 import type { RiderOrder } from '@/types/rider';
 
@@ -47,6 +47,8 @@ export const ActiveOrderCard = memo(function ActiveOrderCard({ order, busy, onAc
   const isBank = String(order.paymentMethod ?? '').toUpperCase() === 'BANK_TRANSFER';
   const isCod = String(order.paymentMethod ?? '').toUpperCase() === 'COD';
   const pay = String(order.paymentStatus ?? '').toUpperCase();
+  const payInUsd = Boolean((order as { payInUsd?: boolean }).payInUsd);
+  const totalUsd = (order as { totalUsd?: number | null }).totalUsd;
 
   const openDetails = useCallback(() => {
     router.push(`/order/${order._id}` as never);
@@ -58,8 +60,13 @@ export const ActiveOrderCard = memo(function ActiveOrderCard({ order, busy, onAc
 
   const runPrimary = useCallback(() => {
     if (!next) return;
+    // COD must record cash + wait for customer confirm — never skip to completeDelivery.
+    if (next === 'complete' && isCod) {
+      router.push(`/order/payment/${order._id}` as never);
+      return;
+    }
     onAction(next);
-  }, [next, onAction]);
+  }, [next, isCod, onAction, order._id, router]);
 
   return (
     <Animated.View
@@ -105,24 +112,46 @@ export const ActiveOrderCard = memo(function ActiveOrderCard({ order, busy, onAc
         />
       </View>
 
-      <View style={[styles.summaryRow, { borderTopColor: theme.border }]}>
-        <View>
-          <ThemedText type="label" themeColor="textSecondary">
-            Order value
-          </ThemedText>
-          <ThemedText style={styles.amount}>{formatJmd(order.grandTotal)}</ThemedText>
-        </View>
-        <View>
-          <ThemedText type="label" themeColor="textSecondary">
-            You earn
-          </ThemedText>
-          <ThemedText style={[styles.amount, { color: theme.partner }]}>
-            {formatJmd(riderEarningForOrder(order))}
-          </ThemedText>
+      <View style={[styles.summarySection, { borderTopColor: theme.border }]}>
+        <View style={styles.summaryGrid}>
+          <View style={styles.summaryCell}>
+            <ThemedText type="label" themeColor="textSecondary">
+              Order value
+            </ThemedText>
+            {payInUsd && totalUsd != null ? (
+              <>
+                <ThemedText style={styles.amountJmd} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.75}>
+                  {formatJmd(order.grandTotal)}
+                </ThemedText>
+                <ThemedText style={[styles.amountUsd, { color: theme.primary }]} numberOfLines={1}>
+                  {formatUsd(totalUsd)}
+                </ThemedText>
+              </>
+            ) : (
+              <ThemedText style={styles.amount} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}>
+                {formatJmd(order.grandTotal)}
+              </ThemedText>
+            )}
+          </View>
+          <View style={[styles.summaryCell, styles.summaryCellRight]}>
+            <ThemedText type="label" themeColor="textSecondary">
+              You earn
+            </ThemedText>
+            <ThemedText
+              style={[styles.amount, { color: theme.partner }]}
+              numberOfLines={1}
+              adjustsFontSizeToFit
+              minimumFontScale={0.8}
+            >
+              {formatJmd(riderEarningForOrder(order))}
+            </ThemedText>
+          </View>
         </View>
         {isCod ? (
           <View style={[styles.codBadge, { backgroundColor: theme.primarySoft }]}>
-            <ThemedText style={[styles.codText, { color: theme.primary }]}>COD · Collect cash</ThemedText>
+            <ThemedText style={[styles.codText, { color: theme.primary }]}>
+              COD · Collect {payInUsd ? 'USD' : 'JMD'} cash
+            </ThemedText>
           </View>
         ) : (
           <View style={[styles.codBadge, { backgroundColor: theme.partnerSoft }]}>
@@ -190,22 +219,28 @@ const styles = StyleSheet.create({
   detailsText: { fontSize: 12 },
   progressWrap: { paddingHorizontal: Spacing.three, paddingTop: Spacing.two },
   locations: { paddingHorizontal: Spacing.three, paddingTop: Spacing.two, gap: Spacing.two },
-  summaryRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    justifyContent: 'space-between',
-    gap: Spacing.two,
+  summarySection: {
     marginTop: Spacing.three,
     paddingTop: Spacing.three,
     paddingHorizontal: Spacing.three,
     borderTopWidth: 1,
+    gap: Spacing.two,
   },
+  summaryGrid: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: Spacing.two,
+  },
+  summaryCell: { flex: 1, minWidth: 0 },
+  summaryCellRight: { alignItems: 'flex-end' },
   amount: { fontSize: 16, fontFamily: Fonts.extraBold, marginTop: 2 },
+  amountJmd: { fontSize: 14, fontFamily: Fonts.bold, marginTop: 2, color: '#586062' },
+  amountUsd: { fontSize: 16, fontFamily: Fonts.extraBold, marginTop: 2 },
   codBadge: {
+    alignSelf: 'stretch',
     borderRadius: 8,
-    paddingHorizontal: 8,
-    paddingVertical: 6,
-    maxWidth: 120,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
   },
   codText: { fontSize: 10, fontFamily: Fonts.bold },
   actions: {
