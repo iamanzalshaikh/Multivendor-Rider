@@ -1,6 +1,10 @@
 import type { RiderOrder } from '@/types/rider';
 
 export function formatDeliveryAddress(order: RiderOrder): string {
+  const point = (order as { deliveryPoint?: { name?: string; campus?: string } }).deliveryPoint;
+  if (point?.name) {
+    return point.campus ? `${point.name} (${point.campus})` : point.name;
+  }
   const addr = order.customerAddress ?? order.deliveryAddress;
   if (order.customerAddress?.fullAddress) return order.customerAddress.fullAddress;
   return [addr?.street, addr?.city, addr?.pincode].filter(Boolean).join(', ') || 'Address on file';
@@ -9,11 +13,18 @@ export function formatDeliveryAddress(order: RiderOrder): string {
 export function formatRestaurantAddress(order: RiderOrder): string {
   const restaurant = order.restaurantId;
   if (typeof restaurant !== 'object' || !restaurant) return 'Address on file';
-  const addr = restaurant.address;
-  if (addr && typeof addr === 'object') {
-    const line = [addr.street, addr.city].filter(Boolean).join(', ');
+  const r = restaurant as {
+    address?: { street?: string; city?: string };
+    addressStreet?: string;
+    addressCity?: string;
+  };
+  const nested = r.address;
+  if (nested && typeof nested === 'object') {
+    const line = [nested.street, nested.city].filter(Boolean).join(', ');
     if (line) return line;
   }
+  const flat = [r.addressStreet, r.addressCity].filter(Boolean).join(', ');
+  if (flat) return flat;
   return 'Restaurant address on file';
 }
 

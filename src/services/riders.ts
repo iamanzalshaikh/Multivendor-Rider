@@ -240,11 +240,6 @@ export async function fetchRiderEarnings() {
 
 export type RiderEarningsSummary = {
   deliveryCount: number;
-  pendingPayout: { deliveryCount: number; grossEarnings: number };
-  totalPaidOut: { deliveryCount: number; grossEarnings: number };
-  totalEarnings: number;
-  todayEarnings: number;
-  earningPerDelivery: number;
   /** Delivered, but the payment is still awaiting verification */
   awaitingVerification: { deliveryCount: number; grossEarnings: number };
   cash: { deliveryCount: number; grossEarnings: number; cashToRemit: number };
@@ -257,49 +252,10 @@ export async function fetchEarningsSummary() {
   return body.data!;
 }
 
-export async function fetchPayoutHistory(page = 1, limit = 20) {
-  const body = await apiFetch<
-    ApiEnvelope<{
-      payouts: {
-        _id: string;
-        netPayable: number;
-        amount?: number;
-        status: string;
-        periodStart?: string;
-        periodEnd?: string;
-        paidAt?: string;
-      }[];
-      pagination?: { total: number };
-    }>
-  >(`/riders/payouts?page=${page}&limit=${limit}`);
-  return body.data ?? { payouts: [] };
-}
 
-export async function fetchWithdrawalRequests(page = 1, limit = 20) {
-  const body = await apiFetch<
-    ApiEnvelope<{
-      requests: {
-        _id: string;
-        requestNumber: string;
-        amount: number;
-        status: string;
-        createdAt: string;
-      }[];
-      availableBalance: number;
-      pagination?: { total: number };
-    }>
-  >(`/riders/withdrawals?page=${page}&limit=${limit}`);
-  return body.data ?? { requests: [], availableBalance: 0 };
-}
-
-export async function requestWithdrawal(amount: number) {
-  const body = await apiFetch<
-    ApiEnvelope<{ request: { _id: string; requestNumber: string; amount: number; status: string } }>
-  >('/riders/withdrawals', {
-    method: 'POST',
-    body: JSON.stringify({ amount }),
-  });
-  return body.data!.request;
+export async function fetchPastShifts() {
+  const body = await apiFetch<ApiEnvelope<any[]>>('/riders/case/shifts/history');
+  return body.data || [];
 }
 
 export async function fetchDeliveryHistory(page = 1, limit = 20) {
@@ -367,6 +323,25 @@ export async function startCaseShift(floatIssued = 0) {
     method: 'POST',
     body: JSON.stringify({ floatIssued }),
   });
+  return body.data!;
+}
+
+export async function endCaseShift(actualCashReturned?: number) {
+  const body = await apiFetch<ApiEnvelope<RiderShiftSummary>>('/riders/case/shift/end', {
+    method: 'POST',
+    body: JSON.stringify({ actualCashReturned }),
+  });
+  return body.data!;
+}
+
+export async function fetchCaseEarningsDashboard() {
+  const body = await apiFetch<
+    ApiEnvelope<{
+      rider: { id: string; riderCode: string; riderType: string; availability: string };
+      activeOrders: number;
+      shift: RiderShiftSummary | null;
+    }>
+  >('/riders/case/earnings');
   return body.data!;
 }
 

@@ -7,10 +7,8 @@ import {
   fetchDeliveryHistory,
   fetchEarningsSummary,
   fetchOrderById,
-  fetchPayoutHistory,
   fetchRiderEarnings,
   fetchRiderMe,
-  fetchWithdrawalRequests,
 } from '@/services/riders';
 
 import { riderKeys } from './keys';
@@ -146,32 +144,6 @@ export function useRiderOrderCache(orderId: string | undefined) {
   return q;
 }
 
-export function usePayoutHistoryQuery(page: number, limit: number, enabled = true) {
-  const q = useQuery({
-    queryKey: riderKeys.payouts(page, limit),
-    queryFn: () => fetchPayoutHistory(page, limit),
-    enabled,
-    staleTime: FIVE_MIN,
-    gcTime: TEN_MIN,
-    refetchOnMount: false,
-  });
-  usePerfQuery('PayoutHistory', q.isFetching, q.dataUpdatedAt);
-  return q;
-}
-
-export function useWithdrawalRequestsQuery(page: number, limit: number, enabled = true) {
-  const q = useQuery({
-    queryKey: riderKeys.withdrawals(page, limit),
-    queryFn: () => fetchWithdrawalRequests(page, limit),
-    enabled,
-    staleTime: FIVE_MIN,
-    gcTime: TEN_MIN,
-    refetchOnMount: false,
-  });
-  usePerfQuery('Withdrawals', q.isFetching, q.dataUpdatedAt);
-  return q;
-}
-
 export function useShiftPurchasesQuery(enabled = true) {
   const q = useQuery({
     queryKey: riderKeys.shiftPurchases,
@@ -192,4 +164,16 @@ export function prefetchRiderOrder(qc: QueryClient, orderId: string) {
     queryFn: () => fetchOrderById(orderId),
     staleTime: ACTIVE_ORDER_STALE,
   });
+}
+
+export function usePastShiftsQuery(enabled = true) {
+  const q = useQuery({
+    queryKey: riderKeys.pastShifts,
+    queryFn: () => import('@/services/riders').then((m) => m.fetchPastShifts()),
+    enabled,
+    staleTime: FIVE_MIN,
+    gcTime: TEN_MIN,
+  });
+  usePerfQuery('PastShifts', q.isFetching, q.dataUpdatedAt);
+  return q;
 }

@@ -7,9 +7,8 @@ export const riderKeys = {
   history: (page: number, limit: number) => ['rider', 'history', page, limit] as const,
   availableOrders: ['rider', 'available-orders'] as const,
   order: (orderId: string) => ['rider', 'order', orderId] as const,
-  payouts: (page: number, limit: number) => ['rider', 'payouts', page, limit] as const,
-  withdrawals: (page: number, limit: number) => ['rider', 'withdrawals', page, limit] as const,
   shiftPurchases: ['rider', 'shift-purchases'] as const,
+  pastShifts: ['rider', 'past-shifts'] as const,
 };
 
 export const notificationKeys = {

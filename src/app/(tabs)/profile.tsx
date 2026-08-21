@@ -204,7 +204,7 @@ export default function ProfileScreen() {
             <View style={styles.actionText}>
               <ThemedText style={styles.actionTitle}>KYC & bank details</ThemedText>
               <ThemedText type="small" themeColor="textSecondary">
-                Upload documents and payout account
+                Upload your verification documents
               </ThemedText>
             </View>
             <Ionicons name="chevron-forward" size={18} color={theme.textSecondary} />

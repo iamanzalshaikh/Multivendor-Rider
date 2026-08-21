@@ -6,7 +6,8 @@ export type AppNotification = {
   title: string;
   message: string;
   isRead: boolean;
-  sentAt: string;
+  createdAt?: string;
+  sentAt?: string;
   redirectType?: string;
   redirectId?: string;
 };
