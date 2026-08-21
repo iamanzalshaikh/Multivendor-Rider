@@ -10,6 +10,8 @@ import {
   RefreshControl,
   Image,
   Alert,
+  Modal,
+  TextInput,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -24,6 +26,7 @@ import { ThemedText } from '@/components/themed-text';
 import { VerificationBanner } from '@/components/verification-banner';
 import { cardStyle, Layout } from '@/constants/layout';
 import { Fonts, Spacing } from '@/constants/theme';
+import { toast } from '@/lib/toast';
 import { useTheme } from '@/hooks/use-theme';
 import { useRiderProfile } from '@/hooks/use-rider-profile';
 import {
@@ -101,8 +104,13 @@ export default function HomeScreen() {
       invalidateRiderProfile(qc);
       invalidateAvailableOrders(qc);
     },
-    onError: (e) =>
-      Alert.alert('Could not update status', e instanceof Error ? e.message : 'Try again'),
+    onError: (e) => {
+      if (e instanceof Error && e.message === 'SHIFT_REQUIRED') {
+        toast.warning('Only admin can start your shift. Please contact admin.', 'Shift Required');
+      } else {
+        toast.error(e instanceof Error ? e.message : 'Try again', 'Could not update status');
+      }
+    },
   });
 
   const earnings = earningsQ.data;
@@ -123,9 +131,6 @@ export default function HomeScreen() {
       : 'Hi, Partner';
 
   const rating = currentRider?.averageRating?.toFixed(1) ?? '0.0';
-  const pendingPayout = summary?.pendingPayout?.grossEarnings ?? 0;
-  const unpaidCount = summary?.pendingPayout?.deliveryCount ?? 0;
-  const paidOut = summary?.totalPaidOut?.grossEarnings ?? 0;
   const openActiveOrder = useCallback(() => {
     if (activeOrderId) {
       prefetchRiderOrder(qc, activeOrderId);
@@ -274,67 +279,27 @@ export default function HomeScreen() {
 
         <EarningsHeroCard
           todayAmount={earnings?.todayEarnings ?? 0}
-          icon="trending-up"
+          icon="wallet"
           meta={[
-            { value: formatJmd(earnings?.totalEarnings), label: 'Lifetime' },
-            { value: `${earnings?.totalDeliveries ?? currentRider?.totalDeliveries ?? 0}`, label: 'Deliveries' },
-            { value: `${rating} ★`, label: 'Rating' },
+            { value: formatJmd(earnings?.totalEarnings), label: 'All time' },
+            { value: earnings?.totalDeliveries?.toString() ?? '0', label: 'Trips' },
           ]}
         />
-
+        
         {shift ? (
-          <Pressable
-            onPress={() => router.push('/purchase')}
-            style={[styles.floatCard, cardStyle, { backgroundColor: theme.backgroundElement, borderColor: theme.border }]}>
-            <View style={styles.floatHeader}>
-              <ThemedText style={styles.floatTitle}>Today&apos;s float</ThemedText>
-              <ThemedText type="link" style={{ fontSize: 12 }}>
-                Details
-              </ThemedText>
-            </View>
+          <View style={[styles.floatCard, cardStyle, { backgroundColor: theme.backgroundElement }]}>
             <View style={styles.floatRow}>
               <View style={styles.floatCol}>
-                <ThemedText type="small" themeColor="textSecondary">
-                  Opening
-                </ThemedText>
-                <ThemedText style={styles.floatValue}>{formatJmd(shift.floatIssued)}</ThemedText>
+                <ThemedText type="small" themeColor="textSecondary">Opening float</ThemedText>
+                <ThemedText style={[styles.floatValue, { color: theme.text }]}>{formatJmd(shift.floatIssued)}</ThemedText>
               </View>
               <View style={styles.floatCol}>
-                <ThemedText type="small" themeColor="textSecondary">
-                  You keep
-                </ThemedText>
-                <ThemedText style={[styles.floatValue, { color: theme.partner }]}>
-                  {formatJmd(shift.riderKeep)}
-                </ThemedText>
-              </View>
-              <View style={styles.floatCol}>
-                <ThemedText type="small" themeColor="textSecondary">
-                  Return
-                </ThemedText>
-                <ThemedText style={[styles.floatValue, { color: theme.primary }]}>
-                  {formatJmd(shift.expectedCashReturn)}
-                </ThemedText>
+                <ThemedText type="small" themeColor="textSecondary">Owe to Admin</ThemedText>
+                <ThemedText style={[styles.floatValue, { color: theme.danger }]}>{formatJmd(shift.expectedCashReturn)}</ThemedText>
               </View>
             </View>
-          </Pressable>
+          </View>
         ) : null}
-
-        <StatGrid>
-          <StatCard
-            label="Pending payout"
-            value={formatJmd(pendingPayout)}
-            hint={`${unpaidCount} unpaid`}
-            icon="hourglass-outline"
-            accent="primary"
-          />
-          <StatCard
-            label="Paid out"
-            value={formatJmd(paidOut)}
-            hint="Transferred"
-            icon="checkmark-circle-outline"
-            accent="partner"
-          />
-        </StatGrid>
 
         {activeOrderId ? (
           <View style={styles.section}>
@@ -457,6 +422,79 @@ const styles = StyleSheet.create({
   content: {
     paddingHorizontal: Layout.screenPadding,
     paddingBottom: Spacing.four,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: Spacing.four,
+  },
+  modalContent: {
+    width: '100%',
+    maxWidth: 400,
+    borderRadius: Layout.cardRadius,
+    padding: Spacing.four,
+    alignItems: 'center',
+  },
+  modalIconWrap: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: Spacing.three,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontFamily: Fonts.extraBold,
+    marginBottom: Spacing.one,
+  },
+  modalSubtitle: {
+    fontSize: 14,
+    textAlign: 'center',
+    marginBottom: Spacing.four,
+  },
+  inputWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    width: '100%',
+    marginBottom: Spacing.four,
+  },
+  currencySymbol: {
+    fontSize: 24,
+    fontFamily: Fonts.bold,
+    marginRight: Spacing.two,
+  },
+  input: {
+    flex: 1,
+    height: 56,
+    borderWidth: 1,
+    borderRadius: Layout.inputRadius,
+    paddingHorizontal: Spacing.three,
+    fontSize: 24,
+    fontFamily: Fonts.bold,
+  },
+  modalButtons: {
+    flexDirection: 'row',
+    gap: Spacing.three,
+    width: '100%',
+  },
+  modalButton: {
+    flex: 1,
+    height: 50,
+    borderRadius: Layout.buttonRadius,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalButtonCancel: {
+    borderWidth: 1,
+  },
+  modalButtonConfirm: {
+  },
+  modalButtonConfirmText: {
+    color: '#fff',
+    fontFamily: Fonts.bold,
   },
   flex1: { flex: 1 },
   onlineCard: {

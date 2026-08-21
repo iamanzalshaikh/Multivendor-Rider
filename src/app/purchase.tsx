@@ -20,6 +20,7 @@ import { useShiftPurchasesQuery } from '@/hooks/queries/rider';
 import { riderKeys } from '@/hooks/queries/keys';
 import { useTheme } from '@/hooks/use-theme';
 import { formatJmd } from '@/lib/money';
+import { toast } from '@/lib/toast';
 import {
   logShiftPurchase,
   startCaseShift,
@@ -52,15 +53,6 @@ export default function LogPurchaseScreen() {
   const [note, setNote] = useState('');
   const [category, setCategory] = useState<ShiftPurchaseCategory>('FUEL');
 
-  const startMut = useMutation({
-    mutationFn: () => startCaseShift(0),
-    onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: riderKeys.shiftPurchases });
-      Alert.alert('Shift started', 'Ask admin to set your opening float if needed.');
-    },
-    onError: (e: Error) => Alert.alert('Could not start shift', e.message),
-  });
-
   const submitMut = useMutation({
     mutationFn: () =>
       logShiftPurchase({
@@ -72,9 +64,9 @@ export default function LogPurchaseScreen() {
       void qc.invalidateQueries({ queryKey: riderKeys.shiftPurchases });
       setAmount('');
       setNote('');
-      Alert.alert('Submitted', 'Waiting for admin approval.');
+      toast.info('Waiting for admin approval.', 'Purchase logged');
     },
-    onError: (e: Error) => Alert.alert('Could not submit', e.message),
+    onError: (e: Error) => toast.error(e.message, 'Could not submit'),
   });
 
   const shift = shiftQ.data?.shift;
@@ -97,18 +89,8 @@ export default function LogPurchaseScreen() {
           <View style={[styles.card, { backgroundColor: theme.backgroundElement, borderColor: theme.border }]}>
             <ThemedText style={styles.cardTitle}>No open shift</ThemedText>
             <ThemedText type="small" themeColor="textSecondary" style={{ marginBottom: 12 }}>
-              Start your shift first. Admin sets the opening float separately.
+              Only admin can start your shift. Please contact admin to get your opening float and start your shift.
             </ThemedText>
-            <Pressable
-              style={[styles.primaryBtn, { backgroundColor: theme.primary }]}
-              disabled={startMut.isPending}
-              onPress={() => startMut.mutate()}>
-              {startMut.isPending ? (
-                <ActivityIndicator color="#fff" />
-              ) : (
-                <ThemedText style={styles.primaryBtnText}>Start shift</ThemedText>
-              )}
-            </Pressable>
           </View>
         ) : (
           <>

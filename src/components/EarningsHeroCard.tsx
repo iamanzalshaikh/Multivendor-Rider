@@ -1,7 +1,7 @@
 import { View, StyleSheet, Text } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import type { ReactNode } from 'react';
+import { Fragment, type ReactNode } from 'react';
 
 import { Layout } from '@/constants/layout';
 import { Spacing, Brand, Fonts } from '@/constants/theme';
@@ -11,7 +11,7 @@ type MetaItem = { value: string; label: string };
 
 type Props = {
   todayAmount: number;
-  meta: [MetaItem, MetaItem, MetaItem];
+  meta: MetaItem[];
   icon?: keyof typeof Ionicons.glyphMap;
   footer?: ReactNode;
 };
@@ -37,26 +37,17 @@ export function EarningsHeroCard({ todayAmount, meta, icon = 'wallet', footer }:
       </View>
       <View style={styles.heroDivider} />
       <View style={styles.heroMetaRow}>
-        <View style={styles.heroMetaItem}>
-          <Text style={styles.heroMetaValue} numberOfLines={1}>
-            {meta[0].value}
-          </Text>
-          <Text style={styles.heroMetaLabel}>{meta[0].label}</Text>
-        </View>
-        <View style={styles.heroMetaDivider} />
-        <View style={styles.heroMetaItem}>
-          <Text style={styles.heroMetaValue} numberOfLines={1}>
-            {meta[1].value}
-          </Text>
-          <Text style={styles.heroMetaLabel}>{meta[1].label}</Text>
-        </View>
-        <View style={styles.heroMetaDivider} />
-        <View style={styles.heroMetaItem}>
-          <Text style={styles.heroMetaValue} numberOfLines={1}>
-            {meta[2].value}
-          </Text>
-          <Text style={styles.heroMetaLabel}>{meta[2].label}</Text>
-        </View>
+        {meta.map((m, index) => (
+          <Fragment key={m.label}>
+            <View style={styles.heroMetaItem}>
+              <Text style={styles.heroMetaValue} numberOfLines={1}>
+                {m.value}
+              </Text>
+              <Text style={styles.heroMetaLabel}>{m.label}</Text>
+            </View>
+            {index < meta.length - 1 && <View style={styles.heroMetaDivider} />}
+          </Fragment>
+        ))}
       </View>
       {footer}
     </LinearGradient>

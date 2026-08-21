@@ -1,10 +1,11 @@
-import { useQueryClient } from '@tanstack/react-query';
-import { View, StyleSheet, RefreshControl, Pressable, FlatList, Platform } from 'react-native';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { View, StyleSheet, RefreshControl, Pressable, FlatList, Platform, Modal, TextInput, ActivityIndicator, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { memo, useCallback, useState } from 'react';
 
-import { EarningsHeroCard } from '@/components/EarningsHeroCard';
+import { endCaseShift } from '@/services/riders';
+import { RiderEarningsDashboardCard } from '@/components/RiderEarningsDashboardCard';
 import { ScreenHeader } from '@/components/screen-header';
 import { SectionCard } from '@/components/section-card';
 import { RiderEarningsSkeleton, SkeletonBlock } from '@/components/skeleton';
@@ -17,9 +18,9 @@ import {
   prefetchRiderOrder,
   useDeliveryHistoryQuery,
   useEarningsSummaryQuery,
-  usePayoutHistoryQuery,
   useRiderEarningsQuery,
   useShiftPurchasesQuery,
+  usePastShiftsQuery,
 } from '@/hooks/queries/rider';
 import { useTheme } from '@/hooks/use-theme';
 import { formatJmd, riderEarningForOrder } from '@/lib/money';
@@ -29,17 +30,6 @@ import type { RiderOrder } from '@/types/rider';
 function formatDate(value?: string) {
   if (!value) return '—';
   return new Date(value).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
-}
-
-function formatPayoutStatus(status: string) {
-  return status.replace(/_/g, ' ').toLowerCase().replace(/^\w/, (c) => c.toUpperCase());
-}
-
-function statusColor(status: string, theme: ReturnType<typeof useTheme>) {
-  const s = status.toLowerCase();
-  if (s.includes('paid') || s.includes('approved') || s.includes('completed')) return theme.partner;
-  if (s.includes('reject') || s.includes('fail')) return theme.danger;
-  return theme.warning;
 }
 
 const DeliveryHistoryRow = memo(function DeliveryHistoryRow({
@@ -86,6 +76,33 @@ const DeliveryHistoryRow = memo(function DeliveryHistoryRow({
     </Pressable>
   );
 });
+const PastShiftRow = memo(function PastShiftRow({
+  shift,
+  theme,
+  onPress,
+}: {
+  shift: any;
+  theme: ReturnType<typeof useTheme>;
+  onPress: () => void;
+}) {
+  const start = new Date(shift.startedAt);
+  const dateStr = start.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
+  
+  return (
+    <Pressable onPress={onPress} style={{ borderBottomWidth: 1, borderBottomColor: theme.border, padding: Spacing.three, flexDirection: 'row', alignItems: 'center' }}>
+      <View style={[styles.tripIcon, { backgroundColor: theme.primarySoft }]}>
+        <Ionicons name="time" size={18} color={theme.primary} />
+      </View>
+      <View style={{ flex: 1, marginHorizontal: 12 }}>
+        <ThemedText style={{ fontFamily: Fonts.semiBold, fontSize: 15 }}>Shift on {dateStr}</ThemedText>
+        <ThemedText type="small" themeColor="textSecondary">
+          {shift.deliveriesCompleted} trips · {formatJmd((shift.deliveryFeesCollected ?? 0) + (shift.tipsReceived ?? 0))} earned
+        </ThemedText>
+      </View>
+      <Ionicons name="chevron-forward" size={16} color={theme.textSecondary} />
+    </Pressable>
+  );
+});
 
 export default function EarningsScreen() {
   const theme = useTheme();
@@ -103,22 +120,36 @@ export default function EarningsScreen() {
   const earningsQ = useRiderEarningsQuery(focused);
   const summaryQ = useEarningsSummaryQuery(focused);
   const historyQ = useDeliveryHistoryQuery(1, 30, focused);
-  const payoutsQ = usePayoutHistoryQuery(1, 10, focused);
   const shiftPurchasesQ = useShiftPurchasesQuery(focused);
+  const pastShiftsQ = usePastShiftsQuery(focused);
+
+  const [showEndShiftModal, setShowEndShiftModal] = useState(false);
+  const [actualCashStr, setActualCashStr] = useState('');
+
+  const endShiftMut = useMutation({
+    mutationFn: (actualCash: number) => endCaseShift(actualCash),
+    onSuccess: () => {
+      setShowEndShiftModal(false);
+      shiftPurchasesQ.refetch();
+      pastShiftsQ.refetch();
+      earningsQ.refetch();
+      Alert.alert('Shift Ended', 'Your shift has been successfully ended and reconciled.');
+    },
+    onError: (e) => {
+      Alert.alert('Could not end shift', e instanceof Error ? e.message : 'Try again');
+    },
+  });
 
   const earnings = earningsQ.data;
   const summary = summaryQ.data;
   const history = historyQ.data?.orders ?? [];
-  const payouts = payoutsQ.data?.payouts ?? [];
   const shift = shiftPurchasesQ.data?.shift;
-  const pendingAmount = summary?.pendingPayout?.grossEarnings ?? 0;
-  const paidAmount = summary?.totalPaidOut?.grossEarnings ?? 0;
-  const unpaidCount = summary?.pendingPayout?.deliveryCount ?? 0;
+  const pastShifts = pastShiftsQ.data ?? [];
   const refreshing =
     historyQ.isRefetching ||
     earningsQ.isRefetching ||
     summaryQ.isRefetching ||
-    payoutsQ.isRefetching ||
+    pastShiftsQ.isRefetching ||
     shiftPurchasesQ.isRefetching;
 
   if (earningsQ.isLoading && summaryQ.isLoading && !earningsQ.data && !summaryQ.data) {
@@ -138,9 +169,9 @@ export default function EarningsScreen() {
             refreshing={refreshing}
             onRefresh={() => {
               historyQ.refetch();
+              pastShiftsQ.refetch();
               earningsQ.refetch();
               summaryQ.refetch();
-              payoutsQ.refetch();
               shiftPurchasesQ.refetch();
             }}
           />
@@ -148,96 +179,87 @@ export default function EarningsScreen() {
         <ScreenHeader title="Earnings" subtitle="Float, payouts, and trips" />
 
         <View style={styles.content}>
-          <EarningsHeroCard
-            todayAmount={earnings?.todayEarnings ?? 0}
-            icon="wallet"
-            meta={[
-              { value: formatJmd(earnings?.totalEarnings), label: 'All time' },
-              { value: `${earnings?.totalDeliveries ?? 0}`, label: 'Trips' },
-              { value: formatJmd(pendingAmount), label: 'Pending' },
-            ]}
+          <RiderEarningsDashboardCard
+            shift={shift}
+            activeOrdersCount={0}
           />
 
-          {shift ? (
-            <Pressable
-              onPress={() => router.push('/purchase')}
-              style={[styles.floatCard, { backgroundColor: theme.backgroundElement, borderColor: theme.border }]}>
-              <View style={styles.floatHeader}>
-                <ThemedText style={styles.historyId}>Today&apos;s float</ThemedText>
-                <ThemedText type="link" style={{ fontSize: 12 }}>
-                  Log purchase
+          <SectionCard
+            title="Purchases"
+            subtitle="Today's logged expenses"
+            action={
+              <Pressable onPress={() => router.push('/purchase')}>
+                <ThemedText type="link" style={{ fontSize: 13 }}>
+                  Log Purchase
                 </ThemedText>
-              </View>
-              <View style={styles.floatRow}>
-                <View style={styles.floatCol}>
-                  <ThemedText type="small" themeColor="textSecondary">
-                    Opening
-                  </ThemedText>
-                  <ThemedText style={styles.floatValue}>{formatJmd(shift.floatIssued)}</ThemedText>
-                </View>
-                <View style={styles.floatCol}>
-                  <ThemedText type="small" themeColor="textSecondary">
-                    You keep
-                  </ThemedText>
-                  <ThemedText style={[styles.floatValue, { color: theme.partner }]}>
-                    {formatJmd(shift.riderKeep)}
-                  </ThemedText>
-                </View>
-                <View style={styles.floatCol}>
-                  <ThemedText type="small" themeColor="textSecondary">
-                    Return to admin
-                  </ThemedText>
-                  <ThemedText style={[styles.floatValue, { color: theme.primary }]}>
-                    {formatJmd(shift.expectedCashReturn)}
-                  </ThemedText>
-                </View>
-              </View>
-              <ThemedText type="small" themeColor="textSecondary" style={{ marginTop: Spacing.two }}>
-                COD collected {formatJmd(shift.cashCollected)} · Purchases{' '}
-                {formatJmd(shift.cashSpentPurchases)}
+              </Pressable>
+            }
+          >
+            {shiftPurchasesQ.isLoading ? (
+              <ActivityIndicator color={theme.textSecondary} />
+            ) : !shiftPurchasesQ.data?.purchases?.length ? (
+              <ThemedText type="small" themeColor="textSecondary">
+                No purchases logged on this shift.
               </ThemedText>
-              {(shift.overpaymentsHeld ?? 0) > 0 ||
-              (shift.underpaymentsShort ?? 0) > 0 ||
-              (shift.walletCreditsApplied ?? 0) > 0 ? (
-                <ThemedText type="small" themeColor="textSecondary" style={{ marginTop: 4 }}>
-                  Overpay held {formatJmd(shift.overpaymentsHeld ?? 0)} · Underpay short{' '}
-                  {formatJmd(shift.underpaymentsShort ?? 0)} · Wallet top-ups{' '}
-                  {formatJmd(shift.walletCreditsApplied ?? 0)}
-                </ThemedText>
-              ) : null}
-            </Pressable>
-          ) : (
-            <Pressable
-              onPress={() => router.push('/purchase')}
-              style={[styles.floatCard, { backgroundColor: theme.backgroundElement, borderColor: theme.border }]}>
-              <View style={styles.floatHeader}>
-                <View style={{ flex: 1 }}>
-                  <ThemedText style={styles.historyId}>Rider float</ThemedText>
-                  <ThemedText type="small" themeColor="textSecondary">
-                    No open shift — ask admin to issue float, or start one here
-                  </ThemedText>
+            ) : (
+              shiftPurchasesQ.data.purchases.slice(0, 3).map((p) => (
+                <View key={p.id} style={{ flexDirection: 'row', gap: 12, paddingVertical: 8, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: theme.border }}>
+                  <View style={{ flex: 1 }}>
+                    <ThemedText style={{ fontFamily: Fonts.semiBold, fontSize: 14, textTransform: 'capitalize' }}>
+                      {String(p.category).replace(/_/g, ' ')}
+                    </ThemedText>
+                    {p.note ? (
+                      <ThemedText type="small" themeColor="textSecondary" numberOfLines={1}>
+                        {p.note}
+                      </ThemedText>
+                    ) : null}
+                  </View>
+                  <View style={{ alignItems: 'flex-end' }}>
+                    <ThemedText style={{ fontFamily: Fonts.semiBold, fontSize: 14 }}>{formatJmd(p.amount)}</ThemedText>
+                    <ThemedText type="small" style={{ color: p.status === 'APPROVED' ? theme.partner : p.status === 'REJECTED' ? theme.danger : theme.warning }}>
+                      {p.status}
+                    </ThemedText>
+                  </View>
                 </View>
-                <Ionicons name="chevron-forward" size={16} color={theme.textSecondary} />
-              </View>
-            </Pressable>
-          )}
+              ))
+            )}
+            {shiftPurchasesQ.data?.purchases && shiftPurchasesQ.data.purchases.length > 3 && (
+              <Pressable onPress={() => router.push('/purchase')} style={{ paddingTop: 8, alignItems: 'center' }}>
+                <ThemedText type="link" style={{ fontSize: 13 }}>View all {shiftPurchasesQ.data.purchases.length} purchases</ThemedText>
+              </Pressable>
+            )}
+          </SectionCard>
 
-          <StatGrid>
-            <StatCard
-              label="Pending payout"
-              value={formatJmd(pendingAmount)}
-              hint={`${unpaidCount} unpaid`}
-              icon="hourglass-outline"
-              accent="primary"
-            />
-            <StatCard
-              label="Paid out"
-              value={formatJmd(paidAmount)}
-              hint="Transferred"
-              icon="checkmark-circle-outline"
-              accent="partner"
-            />
-          </StatGrid>
+          <SectionCard title="Shift History" subtitle="Previous shifts & purchases" noPadding>
+            {pastShiftsQ.isLoading ? (
+              <View style={{ padding: Spacing.three }}>
+                <ActivityIndicator color={theme.primary} />
+              </View>
+            ) : pastShifts.length ? (
+              <>
+                {pastShifts.slice(0, 3).map((s: any) => (
+                  <PastShiftRow 
+                    key={s.id} 
+                    shift={s} 
+                    theme={theme} 
+                    onPress={() => router.push(`/shift/${s.id}` as never)}
+                  />
+                ))}
+                {pastShifts.length > 3 && (
+                  <Pressable onPress={() => router.push('/shift/history' as never)} style={{ paddingTop: Spacing.three, paddingBottom: Spacing.two, alignItems: 'center' }}>
+                    <ThemedText type="link" style={{ fontSize: 13 }}>View all {pastShifts.length} past shifts</ThemedText>
+                  </Pressable>
+                )}
+              </>
+            ) : (
+              <View style={[styles.empty, { padding: Spacing.three }]}>
+                <Ionicons name="time-outline" size={32} color={theme.textSecondary} />
+                <ThemedText type="small" themeColor="textSecondary" style={styles.emptySub}>
+                  No past shifts found.
+                </ThemedText>
+              </View>
+            )}
+          </SectionCard>
 
           <SectionCard title="Recent deliveries" subtitle="Last 30 completed trips" noPadding>
             {historyQ.isLoading ? (
@@ -282,36 +304,58 @@ export default function EarningsScreen() {
               </View>
             )}
           </SectionCard>
-
-          {payouts.length > 0 ? (
-            <SectionCard title="Payout history" subtitle="Transfers from admin" noPadding>
-              {payouts.map((p, i) => (
-                <View
-                  key={p._id}
-                  style={[
-                    styles.historyRow,
-                    i < payouts.length - 1 && { borderBottomWidth: 1, borderBottomColor: theme.border },
-                  ]}>
-                  <View style={[styles.tripIcon, { backgroundColor: theme.partnerSoft }]}>
-                    <Ionicons name="cash-outline" size={18} color={theme.partner} />
-                  </View>
-                  <View style={styles.historyLeft}>
-                    <ThemedText style={styles.historyId}>
-                      {formatJmd(p.netPayable ?? p.amount ?? 0)}
-                    </ThemedText>
-                    <ThemedText type="small" style={{ color: statusColor(p.status, theme) }}>
-                      {formatPayoutStatus(p.status)}
-                    </ThemedText>
-                  </View>
-                  <ThemedText type="small" themeColor="textSecondary">
-                    {formatDate(p.paidAt)}
-                  </ThemedText>
-                </View>
-              ))}
-            </SectionCard>
-          ) : null}
         </View>
       </TabScrollView>
+
+      <Modal visible={showEndShiftModal} transparent animationType="fade">
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { backgroundColor: theme.background }]}>
+            <View style={[styles.modalIconWrap, { backgroundColor: theme.primarySoft }]}>
+              <Ionicons name="cash" size={32} color={theme.primary} />
+            </View>
+            <ThemedText style={styles.modalTitle}>End Shift</ThemedText>
+            <ThemedText style={styles.modalSubtitle} themeColor="textSecondary">
+              Expected Return: {formatJmd(shift?.expectedCashReturn)}
+            </ThemedText>
+
+            <View style={styles.inputWrap}>
+              <ThemedText style={styles.currencySymbol} themeColor="textSecondary">$</ThemedText>
+              <TextInput
+                style={[styles.input, { color: theme.text, borderColor: theme.border }]}
+                keyboardType="numeric"
+                value={actualCashStr}
+                onChangeText={setActualCashStr}
+                placeholder="Actual Cash Returned"
+                placeholderTextColor={theme.textSecondary}
+              />
+            </View>
+
+            <View style={styles.modalButtons}>
+              <Pressable
+                style={[styles.modalButton, styles.modalButtonCancel, { borderColor: theme.border }]}
+                onPress={() => setShowEndShiftModal(false)}
+                disabled={endShiftMut.isPending}
+              >
+                <ThemedText>Cancel</ThemedText>
+              </Pressable>
+              <Pressable
+                style={[styles.modalButton, styles.modalButtonConfirm, { backgroundColor: theme.primary }]}
+                onPress={() => {
+                  const num = parseFloat(actualCashStr);
+                  endShiftMut.mutate(isNaN(num) ? 0 : num);
+                }}
+                disabled={endShiftMut.isPending}
+              >
+                {endShiftMut.isPending ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <ThemedText style={styles.modalButtonConfirmText}>End Shift</ThemedText>
+                )}
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -321,6 +365,90 @@ const styles = StyleSheet.create({
   content: {
     paddingHorizontal: Layout.screenPadding,
     paddingBottom: Spacing.four,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: Spacing.four,
+  },
+  modalContent: {
+    width: '100%',
+    maxWidth: 400,
+    borderRadius: Layout.cardRadius,
+    padding: Spacing.four,
+    alignItems: 'center',
+  },
+  modalIconWrap: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: Spacing.three,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontFamily: Fonts.extraBold,
+    marginBottom: Spacing.one,
+  },
+  modalSubtitle: {
+    fontSize: 14,
+    textAlign: 'center',
+    marginBottom: Spacing.four,
+  },
+  inputWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    width: '100%',
+    marginBottom: Spacing.four,
+  },
+  currencySymbol: {
+    fontSize: 24,
+    fontFamily: Fonts.bold,
+    marginRight: Spacing.two,
+  },
+  input: {
+    flex: 1,
+    height: 56,
+    borderWidth: 1,
+    borderRadius: Layout.inputRadius,
+    paddingHorizontal: Spacing.three,
+    fontSize: 24,
+    fontFamily: Fonts.bold,
+  },
+  modalButtons: {
+    flexDirection: 'row',
+    gap: Spacing.three,
+    width: '100%',
+  },
+  modalButton: {
+    flex: 1,
+    height: 50,
+    borderRadius: Layout.buttonRadius,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalButtonCancel: {
+    borderWidth: 1,
+  },
+  modalButtonConfirm: {
+  },
+  modalButtonConfirmText: {
+    color: '#fff',
+    fontFamily: Fonts.bold,
+  },
+  endShiftBtn: {
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    backgroundColor: 'rgba(239, 68, 68, 0.1)',
+    borderRadius: 8,
+  },
+  endShiftBtnText: {
+    color: '#EF4444',
+    fontFamily: Fonts.bold,
+    fontSize: 13,
   },
   floatCard: {
     borderWidth: 1,

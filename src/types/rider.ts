@@ -83,8 +83,15 @@ export type RiderOrder = {
     phone?: string;
     latitude?: number;
     longitude?: number;
+    addressStreet?: string;
+    addressCity?: string;
     address?: { street?: string; city?: string };
     location?: { coordinates?: [number, number] };
+  };
+  deliveryPoint?: {
+    id?: string;
+    name?: string;
+    campus?: string;
   };
   customerId?: {
     _id: string;

@@ -14,7 +14,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { memo, useCallback } from 'react';
 
 import { ThemedText } from '@/components/themed-text';
-import { cardStyle, Layout } from '@/constants/layout';
+import { Layout } from '@/constants/layout';
 import { Fonts, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { notificationKeys } from '@/hooks/queries/keys';
@@ -25,8 +25,11 @@ import {
   type AppNotification,
 } from '@/services/notifications';
 
-function formatTimeAgo(value: string) {
-  const diff = Date.now() - new Date(value).getTime();
+function formatTimeAgo(value: string | undefined) {
+  if (!value) return 'Just now';
+  const time = new Date(value).getTime();
+  if (isNaN(time)) return 'Just now';
+  const diff = Date.now() - time;
   const mins = Math.floor(diff / 60000);
   if (mins < 1) return 'Just now';
   if (mins < 60) return `${mins}m ago`;
@@ -35,7 +38,7 @@ function formatTimeAgo(value: string) {
   return new Date(value).toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
 }
 
-const NotificationRow = memo(function NotificationRow({
+const NotificationCard = memo(function NotificationCard({
   item,
   onPress,
 }: {
@@ -44,32 +47,46 @@ const NotificationRow = memo(function NotificationRow({
 }) {
   const theme = useTheme();
   const isOrder = item.notificationType === 'ORDER';
+  
+  // Backend often returns createdAt instead of sentAt depending on schema
+  const timestamp = item.createdAt || item.sentAt;
 
   return (
     <Pressable
       onPress={onPress}
-      style={[
-        styles.row,
-        !item.isRead && { backgroundColor: `${theme.primary}08` },
-        { borderBottomColor: theme.border },
-      ]}>
-      <View style={[styles.iconWrap, { backgroundColor: isOrder ? theme.primarySoft : theme.background }]}>
-        <Ionicons
-          name={isOrder ? 'bicycle' : 'notifications-outline'}
-          size={20}
-          color={isOrder ? theme.primary : theme.textSecondary}
-        />
+      style={({ pressed }) => [
+        styles.card,
+        { backgroundColor: theme.backgroundElement, shadowColor: theme.text },
+        pressed && { opacity: 0.8 }
+      ]}
+    >
+      {!item.isRead && (
+        <View style={[styles.unreadAccent, { backgroundColor: theme.primary }]} />
+      )}
+      
+      <View style={styles.cardContent}>
+        <View style={[styles.iconWrap, { backgroundColor: isOrder ? theme.primarySoft : `${theme.textSecondary}15` }]}>
+          <Ionicons
+            name={isOrder ? 'bicycle' : 'notifications-outline'}
+            size={22}
+            color={isOrder ? theme.primary : theme.text}
+          />
+        </View>
+        
+        <View style={styles.rowBody}>
+          <View style={styles.headerRow}>
+            <ThemedText style={[styles.rowTitle, !item.isRead && styles.unreadTitle]} numberOfLines={1}>
+              {item.title}
+            </ThemedText>
+            <ThemedText type="small" themeColor="textSecondary" style={styles.time}>
+              {formatTimeAgo(timestamp)}
+            </ThemedText>
+          </View>
+          <ThemedText style={styles.messageText} themeColor="textSecondary" numberOfLines={2}>
+            {item.message}
+          </ThemedText>
+        </View>
       </View>
-      <View style={styles.rowBody}>
-        <ThemedText style={[styles.rowTitle, !item.isRead && styles.unreadTitle]}>{item.title}</ThemedText>
-        <ThemedText type="small" themeColor="textSecondary" numberOfLines={2}>
-          {item.message}
-        </ThemedText>
-        <ThemedText type="small" themeColor="textSecondary" style={styles.time}>
-          {formatTimeAgo(item.sentAt)}
-        </ThemedText>
-      </View>
-      {!item.isRead ? <View style={[styles.unreadDot, { backgroundColor: theme.primary }]} /> : null}
     </Pressable>
   );
 });
@@ -117,7 +134,7 @@ export default function NotificationsScreen() {
 
   const renderItem = useCallback(
     ({ item }: { item: AppNotification }) => (
-      <NotificationRow item={item} onPress={() => onOpen(item)} />
+      <NotificationCard item={item} onPress={() => onOpen(item)} />
     ),
     [onOpen],
   );
@@ -125,18 +142,18 @@ export default function NotificationsScreen() {
   return (
     <SafeAreaView style={[styles.root, { backgroundColor: theme.background }]} edges={['top']}>
       <View style={styles.header}>
-        <Pressable onPress={() => router.back()} hitSlop={8}>
-          <Ionicons name="chevron-back" size={26} color={theme.text} />
+        <Pressable onPress={() => router.back()} hitSlop={8} style={styles.backBtn}>
+          <Ionicons name="chevron-back" size={24} color={theme.text} />
         </Pressable>
         <ThemedText style={styles.headerTitle}>Notifications</ThemedText>
         {unread > 0 ? (
-          <Pressable onPress={() => readAllMut.mutate()} disabled={readAllMut.isPending}>
-            <ThemedText type="link" style={{ fontSize: 13 }}>
+          <Pressable onPress={() => readAllMut.mutate()} disabled={readAllMut.isPending} hitSlop={8}>
+            <ThemedText type="link" style={{ fontSize: 13, fontFamily: Fonts.bold }}>
               Mark all read
             </ThemedText>
           </Pressable>
         ) : (
-          <View style={{ width: 72 }} />
+          <View style={{ width: 85 }} />
         )}
       </View>
 
@@ -154,13 +171,15 @@ export default function NotificationsScreen() {
           refreshControl={
             <RefreshControl refreshing={listQ.isRefetching} onRefresh={() => listQ.refetch()} />
           }
-          contentContainerStyle={notifications.length ? undefined : styles.emptyWrap}
+          contentContainerStyle={[styles.listContainer, notifications.length === 0 && styles.emptyWrap]}
           ListEmptyComponent={
-            <View style={[styles.empty, cardStyle, { backgroundColor: theme.backgroundElement }]}>
-              <Ionicons name="notifications-off-outline" size={40} color={theme.textSecondary} />
+            <View style={[styles.empty, { backgroundColor: theme.backgroundElement }]}>
+              <View style={styles.emptyIconWrap}>
+                <Ionicons name="notifications-off-outline" size={32} color={theme.textSecondary} />
+              </View>
               <ThemedText style={styles.emptyTitle}>All caught up</ThemedText>
-              <ThemedText type="small" themeColor="textSecondary">
-                New delivery alerts and updates will show here.
+              <ThemedText type="small" themeColor="textSecondary" style={styles.emptyDesc}>
+                New delivery alerts and important updates will appear here.
               </ThemedText>
             </View>
           }
@@ -177,56 +196,105 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: Layout.screenPadding,
-    paddingVertical: Spacing.two,
+    paddingVertical: Spacing.three,
+    marginBottom: Spacing.two,
+  },
+  backBtn: {
+    width: 32,
+    alignItems: 'flex-start',
   },
   headerTitle: {
     fontSize: 18,
     fontFamily: Fonts.bold,
   },
-  row: {
+  listContainer: {
+    paddingHorizontal: Layout.screenPadding,
+    paddingBottom: Layout.safeAreaBottom + 20,
+    gap: Spacing.three,
+  },
+  card: {
+    borderRadius: 16,
+    overflow: 'hidden',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
+    position: 'relative',
+  },
+  unreadAccent: {
+    position: 'absolute',
+    left: 0,
+    top: 0,
+    bottom: 0,
+    width: 4,
+  },
+  cardContent: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    paddingHorizontal: Layout.screenPadding,
-    paddingVertical: 14,
-    borderBottomWidth: 1,
-    gap: Spacing.two,
+    padding: Spacing.three,
+    paddingLeft: Spacing.four,
+    gap: Spacing.three,
   },
   iconWrap: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  rowBody: { flex: 1 },
+  rowBody: { 
+    flex: 1,
+    justifyContent: 'center',
+  },
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 4,
+  },
   rowTitle: {
-    fontSize: 14,
+    flex: 1,
+    fontSize: 15,
     fontFamily: Fonts.semiBold,
-    marginBottom: 2,
+    marginRight: 8,
   },
   unreadTitle: {
     fontFamily: Fonts.bold,
   },
-  time: { marginTop: 4 },
-  unreadDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    marginTop: 6,
+  time: { 
+    fontFamily: Fonts.medium,
+    fontSize: 11,
+  },
+  messageText: {
+    fontSize: 13,
+    lineHeight: 18,
   },
   emptyWrap: {
     flexGrow: 1,
     justifyContent: 'center',
-    padding: Layout.screenPadding,
   },
   empty: {
     padding: Spacing.five,
     alignItems: 'center',
-    gap: Spacing.one,
+    borderRadius: 20,
+    marginHorizontal: Spacing.four,
+  },
+  emptyIconWrap: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: 'rgba(150,150,150,0.1)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: Spacing.three,
   },
   emptyTitle: {
-    fontSize: 16,
+    fontSize: 18,
     fontFamily: Fonts.bold,
-    marginTop: Spacing.one,
+  },
+  emptyDesc: {
+    textAlign: 'center',
+    marginTop: 6,
+    paddingHorizontal: Spacing.two,
   },
 });

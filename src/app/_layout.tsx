@@ -18,6 +18,7 @@ import {
 
 import { Brand } from '@/constants/theme';
 import { queryClient } from '@/lib/queryClient';
+import { ToastHost } from '@/components/toast-host';
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
@@ -61,6 +62,7 @@ export default function RootLayout() {
                 contentStyle: { backgroundColor: Brand.surface },
               }}
             />
+            <ToastHost />
           </ThemeProvider>
         </QueryClientProvider>
       </SafeAreaProvider>
