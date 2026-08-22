@@ -182,6 +182,14 @@ export async function markArrived(orderId: string) {
   return asRiderOrder(body.data, orderId);
 }
 
+export async function batchUpdateCaseOrderStatuses(status: string) {
+  const body = await apiFetch<ApiEnvelope<RiderOrder[]>>(`/riders/case/orders/batch-status`, {
+    method: 'PATCH',
+    body: JSON.stringify({ status }),
+  });
+  return body.data ?? [];
+}
+
 /** @deprecated use markArrived — kept for older call sites */
 export async function startDelivery(orderId: string) {
   return markArrived(orderId);

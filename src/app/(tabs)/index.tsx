@@ -43,7 +43,7 @@ import { hasUploadedImage } from '@/lib/imageUtils';
 import { emitRiderOnlineStatus } from '@/lib/riderSocketActions';
 import { formatJmd, riderEarningForOrder } from '@/lib/money';
 import { countPendingCashSessions, syncPendingCashSessions } from '@/lib/offlineCashQueue';
-import { updateRiderOnlineStatus } from '@/services/riders';
+import { batchUpdateCaseOrderStatuses, updateRiderOnlineStatus } from '@/services/riders';
 import { useRiderStore } from '@/stores/riderStore';
 import type { VerificationStatus } from '@/types/rider';
 
@@ -77,6 +77,7 @@ export default function HomeScreen() {
   const historyQ = useDeliveryHistoryQuery(1, 5, true);
   const shiftQ = useShiftPurchasesQuery(true);
   const [pendingSync, setPendingSync] = useState(0);
+  const [showBatchModal, setShowBatchModal] = useState(false);
 
   useEffect(() => {
     void (async () => {
@@ -110,6 +111,20 @@ export default function HomeScreen() {
       } else {
         toast.error(e instanceof Error ? e.message : 'Try again', 'Could not update status');
       }
+    },
+  });
+
+  const batchUpdateMut = useMutation({
+    mutationFn: (status: string) => batchUpdateCaseOrderStatuses(status),
+    onSuccess: () => {
+      toast.success('Successfully updated all active deliveries.');
+      setShowBatchModal(false);
+      if (activeOrderId) {
+        qc.invalidateQueries({ queryKey: riderKeys.order(activeOrderId) });
+      }
+    },
+    onError: (e) => {
+      toast.error(e instanceof Error ? e.message : 'Try again', 'Update Failed');
     },
   });
 
@@ -337,6 +352,17 @@ export default function HomeScreen() {
                 </>
               )}
             </Pressable>
+            <Pressable
+              onPress={() => setShowBatchModal(true)}
+              style={[
+                styles.cta,
+                { backgroundColor: theme.primary, opacity: batchUpdateMut.isPending ? 0.55 : 1, marginTop: Spacing.two },
+              ]}
+              disabled={batchUpdateMut.isPending}>
+              <ThemedText style={styles.ctaText}>
+                {batchUpdateMut.isPending ? 'Updating...' : 'Update All Statuses'}
+              </ThemedText>
+            </Pressable>
           </View>
         ) : null}
 
@@ -413,6 +439,39 @@ export default function HomeScreen() {
           </ThemedText>
         </Pressable>
       </View>
+
+      <Modal visible={showBatchModal} transparent animationType="fade">
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { backgroundColor: theme.backgroundElement }]}>
+            <View style={[styles.modalIconWrap, { backgroundColor: theme.primarySoft }]}>
+              <Ionicons name="list" size={28} color={theme.primary} />
+            </View>
+            <ThemedText style={styles.modalTitle}>Batch Update</ThemedText>
+            <ThemedText themeColor="textSecondary" style={styles.modalSubtitle}>
+              Update the status of all your active deliveries at once.
+            </ThemedText>
+
+            <View style={{ width: '100%', gap: Spacing.two, marginBottom: Spacing.four }}>
+              {['PICKED_UP', 'ON_THE_WAY', 'ARRIVED'].map((status) => (
+                <Pressable
+                  key={status}
+                  style={[styles.modalButton, styles.modalButtonCancel, { borderColor: theme.border, marginBottom: 8 }]}
+                  onPress={() => batchUpdateMut.mutate(status)}>
+                  <ThemedText style={{ fontFamily: Fonts.bold }}>
+                    {status.replace(/_/g, ' ')}
+                  </ThemedText>
+                </Pressable>
+              ))}
+            </View>
+
+            <Pressable
+              style={[styles.modalButton, styles.modalButtonConfirm, { backgroundColor: theme.textSecondary }]}
+              onPress={() => setShowBatchModal(false)}>
+              <ThemedText style={styles.modalButtonConfirmText}>Cancel</ThemedText>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
     </TabScrollView>
   );
 }
