@@ -4,7 +4,6 @@ import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { memo, useCallback, useState } from 'react';
 
-import { endCaseShift } from '@/services/riders';
 import { RiderEarningsDashboardCard } from '@/components/RiderEarningsDashboardCard';
 import { ScreenHeader } from '@/components/screen-header';
 import { SectionCard } from '@/components/section-card';
@@ -122,23 +121,6 @@ export default function EarningsScreen() {
   const historyQ = useDeliveryHistoryQuery(1, 30, focused);
   const shiftPurchasesQ = useShiftPurchasesQuery(focused);
   const pastShiftsQ = usePastShiftsQuery(focused);
-
-  const [showEndShiftModal, setShowEndShiftModal] = useState(false);
-  const [actualCashStr, setActualCashStr] = useState('');
-
-  const endShiftMut = useMutation({
-    mutationFn: (actualCash: number) => endCaseShift(actualCash),
-    onSuccess: () => {
-      setShowEndShiftModal(false);
-      shiftPurchasesQ.refetch();
-      pastShiftsQ.refetch();
-      earningsQ.refetch();
-      Alert.alert('Shift Ended', 'Your shift has been successfully ended and reconciled.');
-    },
-    onError: (e) => {
-      Alert.alert('Could not end shift', e instanceof Error ? e.message : 'Try again');
-    },
-  });
 
   const earnings = earningsQ.data;
   const summary = summaryQ.data;
@@ -306,56 +288,6 @@ export default function EarningsScreen() {
           </SectionCard>
         </View>
       </TabScrollView>
-
-      <Modal visible={showEndShiftModal} transparent animationType="fade">
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, { backgroundColor: theme.background }]}>
-            <View style={[styles.modalIconWrap, { backgroundColor: theme.primarySoft }]}>
-              <Ionicons name="cash" size={32} color={theme.primary} />
-            </View>
-            <ThemedText style={styles.modalTitle}>End Shift</ThemedText>
-            <ThemedText style={styles.modalSubtitle} themeColor="textSecondary">
-              Expected Return: {formatJmd(shift?.expectedCashReturn)}
-            </ThemedText>
-
-            <View style={styles.inputWrap}>
-              <ThemedText style={styles.currencySymbol} themeColor="textSecondary">$</ThemedText>
-              <TextInput
-                style={[styles.input, { color: theme.text, borderColor: theme.border }]}
-                keyboardType="numeric"
-                value={actualCashStr}
-                onChangeText={setActualCashStr}
-                placeholder="Actual Cash Returned"
-                placeholderTextColor={theme.textSecondary}
-              />
-            </View>
-
-            <View style={styles.modalButtons}>
-              <Pressable
-                style={[styles.modalButton, styles.modalButtonCancel, { borderColor: theme.border }]}
-                onPress={() => setShowEndShiftModal(false)}
-                disabled={endShiftMut.isPending}
-              >
-                <ThemedText>Cancel</ThemedText>
-              </Pressable>
-              <Pressable
-                style={[styles.modalButton, styles.modalButtonConfirm, { backgroundColor: theme.primary }]}
-                onPress={() => {
-                  const num = parseFloat(actualCashStr);
-                  endShiftMut.mutate(isNaN(num) ? 0 : num);
-                }}
-                disabled={endShiftMut.isPending}
-              >
-                {endShiftMut.isPending ? (
-                  <ActivityIndicator color="#fff" />
-                ) : (
-                  <ThemedText style={styles.modalButtonConfirmText}>End Shift</ThemedText>
-                )}
-              </Pressable>
-            </View>
-          </View>
-        </View>
-      </Modal>
     </View>
   );
 }

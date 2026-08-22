@@ -27,15 +27,21 @@ import {
 
 function formatTimeAgo(value: string | undefined) {
   if (!value) return 'Just now';
-  const time = new Date(value).getTime();
-  if (isNaN(time)) return 'Just now';
+  let time = new Date(value).getTime();
+  if (isNaN(time)) {
+    // Try iOS fallback (replace space with T)
+    time = new Date(value.replace(' ', 'T')).getTime();
+    if (isNaN(time)) return 'Just now';
+  }
   const diff = Date.now() - time;
   const mins = Math.floor(diff / 60000);
   if (mins < 1) return 'Just now';
   if (mins < 60) return `${mins}m ago`;
   const hours = Math.floor(mins / 60);
   if (hours < 24) return `${hours}h ago`;
-  return new Date(value).toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
+  
+  const d = new Date(time);
+  return d.toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
 }
 
 const NotificationCard = memo(function NotificationCard({
@@ -56,8 +62,8 @@ const NotificationCard = memo(function NotificationCard({
       onPress={onPress}
       style={({ pressed }) => [
         styles.card,
-        { backgroundColor: theme.backgroundElement, shadowColor: theme.text },
-        pressed && { opacity: 0.8 }
+        { backgroundColor: theme.backgroundElement, borderColor: item.isRead ? theme.border : theme.primary },
+        pressed && { transform: [{ scale: 0.98 }] }
       ]}
     >
       {!item.isRead && (
@@ -65,24 +71,26 @@ const NotificationCard = memo(function NotificationCard({
       )}
       
       <View style={styles.cardContent}>
-        <View style={[styles.iconWrap, { backgroundColor: isOrder ? theme.primarySoft : `${theme.textSecondary}15` }]}>
+        <View style={[styles.iconWrap, { 
+          backgroundColor: item.isRead ? (isOrder ? theme.primarySoft : `${theme.textSecondary}15`) : theme.primary 
+        }]}>
           <Ionicons
-            name={isOrder ? 'bicycle' : 'notifications-outline'}
-            size={22}
-            color={isOrder ? theme.primary : theme.text}
+            name={isOrder ? 'bicycle' : 'notifications'}
+            size={20}
+            color={item.isRead ? (isOrder ? theme.primary : theme.text) : '#fff'}
           />
         </View>
         
         <View style={styles.rowBody}>
           <View style={styles.headerRow}>
-            <ThemedText style={[styles.rowTitle, !item.isRead && styles.unreadTitle]} numberOfLines={1}>
+            <ThemedText style={[styles.rowTitle, !item.isRead && styles.unreadTitle, { color: item.isRead ? theme.textSecondary : theme.text }]} numberOfLines={1}>
               {item.title}
             </ThemedText>
-            <ThemedText type="small" themeColor="textSecondary" style={styles.time}>
+            <ThemedText type="small" style={[styles.time, { color: item.isRead ? theme.textSecondary : theme.primary }]}>
               {formatTimeAgo(timestamp)}
             </ThemedText>
           </View>
-          <ThemedText style={styles.messageText} themeColor="textSecondary" numberOfLines={2}>
+          <ThemedText style={[styles.messageText, { color: item.isRead ? theme.textSecondary : theme.text }]} numberOfLines={2}>
             {item.message}
           </ThemedText>
         </View>
@@ -214,12 +222,14 @@ const styles = StyleSheet.create({
   },
   card: {
     borderRadius: 16,
+    borderWidth: 1,
     overflow: 'hidden',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    elevation: 3,
     position: 'relative',
+    marginBottom: 4,
   },
   unreadAccent: {
     position: 'absolute',
