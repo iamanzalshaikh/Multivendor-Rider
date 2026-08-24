@@ -18,9 +18,18 @@ export function useClearStaleActiveTrip(orderId?: string | null, orderStatus?: s
   useEffect(() => {
     const status = String(orderStatus ?? '').toUpperCase();
     if (!orderId || !status || !TERMINAL.has(status)) return;
-    if (!rider?.currentOrderId || rider.currentOrderId !== orderId) return;
+    
+    // Check if the order is actually in our active lists
+    const isCurrent = rider?.currentOrderId === orderId;
+    const isActive = rider?.activeOrderIds?.includes(orderId);
+    
+    if (!isCurrent && !isActive) return;
 
-    setRider({ ...rider, currentOrderId: undefined });
+    setRider({ 
+      ...rider!, 
+      currentOrderId: isCurrent ? undefined : rider!.currentOrderId,
+      activeOrderIds: rider!.activeOrderIds?.filter(id => id !== orderId) ?? []
+    });
     void qc.invalidateQueries({ queryKey: riderKeys.me });
     void qc.invalidateQueries({ queryKey: riderKeys.availableOrders });
   }, [orderId, orderStatus, rider, setRider, qc]);

@@ -30,10 +30,8 @@ export default function JobsScreen() {
   const router = useRouter();
   const qc = useQueryClient();
   const tabBarHeight = useTabBarHeight();
-  const { rider, onlineStatus, currentOrderId, isLoading: profileLoading } = useRiderProfile();
-  const hasActive = Boolean(currentOrderId);
-
-  const availableQ = useAvailableOrdersQuery(onlineStatus, hasActive);
+  const { rider, onlineStatus, isLoading: profileLoading, activeOrderIds } = useRiderProfile();
+  const availableQ = useAvailableOrdersQuery(onlineStatus, false);
 
   const acceptMut = useMutation({
     mutationFn: (orderId: string) => acceptOrder(orderId),
@@ -51,8 +49,7 @@ export default function JobsScreen() {
     [acceptMut],
   );
 
-  const activeOrderId = currentOrderId;
-  const available = (availableQ.data ?? []).filter((o) => o._id !== activeOrderId);
+  const available = (availableQ.data ?? []).filter((o) => !activeOrderIds.includes(o._id));
 
   const renderJob = useCallback(
     ({ item }: { item: RiderOrder }) => (
@@ -83,26 +80,6 @@ export default function JobsScreen() {
         <ThemedText style={styles.centerTitle}>Go online first</ThemedText>
         <ThemedText type="small" themeColor="textSecondary" style={styles.centerSub}>
           Turn on online mode from Home — use the toggle at the top of your dashboard.
-        </ThemedText>
-      </View>
-    );
-  }
-
-  if (hasActive) {
-    return (
-      <View style={[styles.center, { backgroundColor: theme.background, paddingBottom: tabBarHeight }]}>
-        <View style={[styles.offlineIcon, { backgroundColor: theme.primarySoft }]}>
-          <Ionicons name="bicycle" size={40} color={theme.primary} />
-        </View>
-        <ThemedText style={styles.centerTitle}>Finish current trip</ThemedText>
-        <ThemedText type="small" themeColor="textSecondary" style={styles.centerSub}>
-          Complete your active delivery before accepting a new job.
-        </ThemedText>
-        <ThemedText
-          type="link"
-          onPress={() => router.push('/(tabs)/orders')}
-          style={{ marginTop: Spacing.three }}>
-          Open active trip →
         </ThemedText>
       </View>
     );

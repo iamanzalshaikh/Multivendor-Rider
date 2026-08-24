@@ -76,7 +76,7 @@ export function DeliveryOfferModal() {
           <ThemedText style={styles.orderId}>#{offer.orderNumber}</ThemedText>
           <ThemedText style={styles.restaurant}>{offer.restaurantName}</ThemedText>
           <ThemedText type="small" themeColor="textSecondary" style={styles.meta}>
-            Order value {formatJmd(offer.grandTotal)} · You earn {formatJmd(offer.riderEarning)}
+            Order value {formatJmd(offer.grandTotal)} · Delivery fee {formatJmd(offer.riderEarning)}
           </ThemedText>
 
           <View style={[styles.timerRow, { backgroundColor: theme.primarySoft }]}>
