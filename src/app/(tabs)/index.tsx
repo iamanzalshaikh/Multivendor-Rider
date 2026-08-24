@@ -37,6 +37,7 @@ import {
   useShiftPurchasesQuery,
   prefetchRiderOrder,
 } from '@/hooks/queries/rider';
+import { riderKeys } from '@/hooks/queries/keys';
 import { invalidateAvailableOrders, invalidateRiderProfile } from '@/lib/riderQueryInvalidation';
 import { useUnreadNotificationCount } from '@/hooks/use-unread-notifications';
 import { hasUploadedImage } from '@/lib/imageUtils';
@@ -45,7 +46,7 @@ import { formatJmd, riderEarningForOrder } from '@/lib/money';
 import { countPendingCashSessions, syncPendingCashSessions } from '@/lib/offlineCashQueue';
 import { batchUpdateCaseOrderStatuses, updateRiderOnlineStatus } from '@/services/riders';
 import { useRiderStore } from '@/stores/riderStore';
-import type { VerificationStatus } from '@/types/rider';
+import type { VerificationStatus, RiderProfile, RiderOrder } from '@/types/rider';
 
 function SectionHeader({ title, action }: { title: string; action?: ReactNode }) {
   return (
@@ -88,14 +89,12 @@ export default function HomeScreen() {
 
   const currentRider = profileRider ?? rider;
   const profileImage = user?.profileImage ?? profileRider?.profileImage;
-  const activeOrderId = currentRider?.currentOrderId;
+  const activeOrderIds = currentRider?.activeOrderIds ?? (currentRider?.currentOrderId ? [currentRider.currentOrderId] : []);
   const isApproved = verificationStatus === 'approved';
 
   useEffect(() => {
-    if (activeOrderId) prefetchRiderOrder(qc, activeOrderId);
-  }, [activeOrderId, qc]);
-
-  const activeOrderQ = useRiderOrderCache(activeOrderId);
+    activeOrderIds.forEach(id => prefetchRiderOrder(qc, id));
+  }, [activeOrderIds, qc]);
 
   const onlineMut = useMutation({
     mutationFn: (online: boolean) => updateRiderOnlineStatus(online),
@@ -119,9 +118,9 @@ export default function HomeScreen() {
     onSuccess: () => {
       toast.success('Successfully updated all active deliveries.');
       setShowBatchModal(false);
-      if (activeOrderId) {
-        qc.invalidateQueries({ queryKey: riderKeys.order(activeOrderId) });
-      }
+      activeOrderIds.forEach(id => {
+        qc.invalidateQueries({ queryKey: riderKeys.order(id) });
+      });
     },
     onError: (e) => {
       toast.error(e instanceof Error ? e.message : 'Try again', 'Update Failed');
@@ -147,11 +146,8 @@ export default function HomeScreen() {
 
   const rating = currentRider?.averageRating?.toFixed(1) ?? '0.0';
   const openActiveOrder = useCallback(() => {
-    if (activeOrderId) {
-      prefetchRiderOrder(qc, activeOrderId);
-      router.push(`/order/${activeOrderId}` as never);
-    }
-  }, [activeOrderId, qc, router]);
+    router.push('/(tabs)/orders' as never);
+  }, [router]);
 
   const homeLoading =
     (!currentRider && (earningsQ.isLoading || summaryQ.isLoading)) ||
@@ -178,7 +174,6 @@ export default function HomeScreen() {
             summaryQ.refetch();
             historyQ.refetch();
             shiftQ.refetch();
-            if (activeOrderId) activeOrderQ.refetch();
           }}
         />
       }>
@@ -316,10 +311,10 @@ export default function HomeScreen() {
           </View>
         ) : null}
 
-        {activeOrderId ? (
+        {activeOrderIds.length > 0 ? (
           <View style={styles.section}>
             <SectionHeader
-              title="Active delivery"
+              title="Active deliveries"
               action={
                 <Pressable onPress={openActiveOrder}>
                   <ThemedText type="link">Open</ThemedText>
@@ -327,33 +322,40 @@ export default function HomeScreen() {
               }
             />
             <Pressable
-              onPressIn={() => activeOrderId && prefetchRiderOrder(qc, activeOrderId)}
               onPress={openActiveOrder}
               style={[styles.activeBanner, cardStyle, { backgroundColor: theme.primarySoft }]}>
-              {activeOrderQ.isLoading ? (
-                <ActivityIndicator color={theme.primary} />
-              ) : (
-                <>
-                  <View style={styles.activeTop}>
-                    <ThemedText style={styles.activeOrderId}>
-                      #
-                      {activeOrderQ.data?.orderNumber ?? activeOrderId.slice(-6).toUpperCase()}
-                    </ThemedText>
-                    <View style={[styles.activeBadge, { backgroundColor: theme.primary }]}>
-                      <ThemedText style={styles.activeBadgeText}>
-                        {(activeOrderQ.data?.orderStatus ?? 'ACTIVE').replace(/_/g, ' ')}
-                      </ThemedText>
-                    </View>
-                  </View>
-                  <ThemedText type="small" themeColor="textSecondary" style={{ marginTop: 6 }}>
-                    Tap to continue delivery · {formatJmd(riderEarningForOrder(activeOrderQ.data))} on
-                    completion
-                  </ThemedText>
-                </>
-              )}
+              <View style={styles.activeTop}>
+                <ThemedText style={styles.activeOrderId}>
+                  {activeOrderIds.length} Active {activeOrderIds.length === 1 ? 'Delivery' : 'Deliveries'}
+                </ThemedText>
+              </View>
+              <ThemedText type="small" themeColor="textSecondary" style={{ marginTop: 6 }}>
+                Tap to manage your active deliveries.
+              </ThemedText>
             </Pressable>
             <Pressable
-              onPress={() => setShowBatchModal(true)}
+              onPress={() => {
+                const orders = activeOrderIds.map(id => qc.getQueryData<RiderOrder>(riderKeys.order(id))).filter(Boolean);
+                
+                if (orders.length === 0 && activeOrderIds.length > 0) {
+                  toast.info('Loading orders, please wait...');
+                  return;
+                }
+
+                const allArrived = orders.every(o => {
+                  const s = String(o?.orderStatus).toUpperCase();
+                  return s === 'ARRIVED' || s === 'DELIVERED' || s === 'COMPLETED';
+                });
+                
+                if (allArrived) {
+                  Alert.alert(
+                    'Batch Update Complete',
+                    'All active orders have already arrived. Please confirm delivery individually at each customer location.'
+                  );
+                  return;
+                }
+                setShowBatchModal(true);
+              }}
               style={[
                 styles.cta,
                 { backgroundColor: theme.primary, opacity: batchUpdateMut.isPending ? 0.55 : 1, marginTop: Spacing.two },
@@ -425,7 +427,7 @@ export default function HomeScreen() {
         </SectionCard>
 
         <Pressable
-          onPress={() => router.push(activeOrderId ? '/(tabs)/orders' : '/(tabs)/jobs')}
+          onPress={() => router.push(activeOrderIds.length > 0 ? '/(tabs)/orders' : '/(tabs)/jobs')}
           style={[styles.cta, { backgroundColor: theme.primary, opacity: isApproved ? 1 : 0.55 }]}
           disabled={!isApproved}>
           <ThemedText style={styles.ctaText}>
@@ -433,8 +435,8 @@ export default function HomeScreen() {
               ? 'Waiting for admin approval'
               : !online
                 ? 'Go online to see jobs'
-                : activeOrderId
-                  ? 'Continue active trip'
+                : activeOrderIds.length > 0
+                  ? 'Continue active trips'
                   : 'Browse delivery jobs'}
           </ThemedText>
         </Pressable>
@@ -452,7 +454,7 @@ export default function HomeScreen() {
             </ThemedText>
 
             <View style={{ width: '100%', gap: Spacing.two, marginBottom: Spacing.four }}>
-              {['PICKED_UP', 'ON_THE_WAY', 'ARRIVED'].map((status) => (
+              {['ON_THE_WAY', 'ARRIVED'].map((status) => (
                 <Pressable
                   key={status}
                   style={[styles.modalButton, styles.modalButtonCancel, { borderColor: theme.border, marginBottom: 8 }]}

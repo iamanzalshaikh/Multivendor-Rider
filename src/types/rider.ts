@@ -19,6 +19,7 @@ export type RiderProfile = {
   onlineStatus: boolean;
   availabilityStatus: RiderAvailability;
   currentOrderId?: string;
+  activeOrderIds?: string[];
   averageRating: number;
   totalDeliveries: number;
   totalEarnings: number;

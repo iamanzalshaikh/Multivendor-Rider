@@ -76,6 +76,13 @@ export function RiderEarningsDashboardCard({ shift, activeOrdersCount, isHistori
         
         <View style={styles.cellWrapper}>
           <View style={styles.cell}>
+            <Text style={[styles.label, { color: 'rgba(255,255,255,0.7)' }]}>COD Collected</Text>
+            <Text style={[styles.value, { color: '#fff' }]}>{formatJmd(shift.cashCollected ?? 0)}</Text>
+          </View>
+        </View>
+        
+        <View style={styles.cellWrapper}>
+          <View style={styles.cell}>
             <Text style={[styles.label, { color: 'rgba(255,255,255,0.7)' }]}>Tips</Text>
             <Text style={[styles.value, { color: '#fff' }]}>{formatJmd(shift.tipsReceived ?? 0)}</Text>
           </View>

@@ -1,4 +1,4 @@
-import { memo, useCallback } from 'react';
+import { memo, useCallback, useState } from 'react';
 import { View, StyleSheet, Pressable, Alert } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
@@ -25,7 +25,7 @@ import type { RiderOrder } from '@/types/rider';
 type Props = {
   order: RiderOrder;
   busy: boolean;
-  onAction: (action: 'pickup' | 'start' | 'arrived' | 'complete' | 'reject') => void;
+  onAction: (action: 'pickup' | 'start' | 'arrived' | 'complete' | 'reject') => boolean | void;
 };
 
 export const ActiveOrderCard = memo(function ActiveOrderCard({ order, busy, onAction }: Props) {
@@ -58,14 +58,20 @@ export const ActiveOrderCard = memo(function ActiveOrderCard({ order, busy, onAc
     prefetchRiderOrder(qc, order._id);
   }, [qc, order._id]);
 
+  const [swipeKey, setSwipeKey] = useState(0);
+
   const runPrimary = useCallback(() => {
     if (!next) return;
     // COD must record cash + wait for customer confirm — never skip to completeDelivery.
     if (next === 'complete' && isCod) {
       router.push(`/order/payment/${order._id}` as never);
+      setSwipeKey((k) => k + 1);
       return;
     }
-    onAction(next);
+    const handled = onAction(next);
+    if (handled === false) {
+      setSwipeKey((k) => k + 1);
+    }
   }, [next, isCod, onAction, order._id, router]);
 
   return (
@@ -92,7 +98,7 @@ export const ActiveOrderCard = memo(function ActiveOrderCard({ order, busy, onAc
       </View>
 
       <View style={styles.progressWrap}>
-        <DeliveryProgressBar status={order.orderStatus} compact />
+        <DeliveryProgressBar status={order.orderStatus} />
       </View>
 
       <View style={styles.locations}>
@@ -135,7 +141,7 @@ export const ActiveOrderCard = memo(function ActiveOrderCard({ order, busy, onAc
           </View>
           <View style={[styles.summaryCell, styles.summaryCellRight]}>
             <ThemedText type="label" themeColor="textSecondary">
-              You earn
+              Delivery amount
             </ThemedText>
             <ThemedText
               style={[styles.amount, { color: theme.partner }]}
@@ -183,6 +189,7 @@ export const ActiveOrderCard = memo(function ActiveOrderCard({ order, busy, onAc
         {next ? (
           <View style={styles.swipeWrap}>
             <SwipeToConfirm
+              key={`swipe-${swipeKey}`}
               label={actionButtonLabel(next, order)}
               busy={busy}
               disabled={busy}

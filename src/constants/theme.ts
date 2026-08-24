@@ -15,7 +15,9 @@ export const Colors = {
     partner: '#22c55e',
     partnerSoft: 'rgba(34, 197, 94, 0.12)',
     danger: '#ef4444',
+    dangerSoft: 'rgba(239, 68, 68, 0.12)',
     warning: '#f59e0b',
+    warningSoft: 'rgba(245, 158, 11, 0.12)',
     border: '#e4e4e7',
   },
   dark: {
@@ -30,7 +32,9 @@ export const Colors = {
     partner: '#22c55e',
     partnerSoft: 'rgba(34, 197, 94, 0.18)',
     danger: '#f87171',
+    dangerSoft: 'rgba(248, 113, 113, 0.18)',
     warning: '#fbbf24',
+    warningSoft: 'rgba(251, 191, 36, 0.18)',
     border: '#2E3135',
   },
 } as const;

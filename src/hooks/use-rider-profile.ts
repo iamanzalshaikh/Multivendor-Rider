@@ -22,6 +22,7 @@ export function useRiderProfile() {
     user: query.data?.user,
     onlineStatus: profile?.onlineStatus ?? false,
     currentOrderId: profile?.currentOrderId,
+    activeOrderIds: profile?.activeOrderIds ?? [],
     verificationStatus: profile?.verificationStatus ?? 'pending',
   };
 }

@@ -4,6 +4,7 @@ export type RiderDeliveryStatus =
   | 'PENDING'
   | 'RIDER_ASSIGNED'
   | 'ON_THE_WAY'
+  | 'ARRIVED'
   | 'DELIVERED'
   | 'CANCELLED';
 
@@ -88,6 +89,11 @@ export const DELIVERY_FLOW_STEPS: DeliveryStep[] = [
     description: 'You have the order — head to campus drop-off',
   },
   {
+    status: 'ARRIVED',
+    label: 'Arrived',
+    description: 'You have arrived at the customer location',
+  },
+  {
     status: 'DELIVERED',
     label: 'Delivered',
     description: 'COD: collect cash · Bank: delivery done (payment may still verify)',
@@ -103,11 +109,10 @@ export type RiderDeliveryAction = 'pickup' | 'arrived' | 'complete' | 'reject';
  */
 export function nextRiderAction(status: string): RiderDeliveryAction | null {
   if (PRE_PICKUP_STATUSES.includes(status)) return 'pickup';
-  if (
-    status === 'PICKED_UP' ||
-    status === 'ON_THE_WAY' ||
-    status === 'ARRIVED'
-  ) {
+  if (status === 'PICKED_UP' || status === 'ON_THE_WAY') {
+    return 'arrived';
+  }
+  if (status === 'ARRIVED') {
     return 'complete';
   }
   return null;
@@ -127,9 +132,9 @@ export function actionButtonLabel(
 ): string {
   switch (action) {
     case 'pickup':
-      return 'On the way';
+      return 'Picked Up';
     case 'arrived':
-      return 'On the way';
+      return 'Mark arrived';
     case 'complete':
       return String(order?.paymentMethod ?? '').toUpperCase() === 'COD'
         ? 'Collect & deliver'
@@ -153,15 +158,16 @@ export function stepIndexForStatus(status: string): number {
     return 0;
   }
   if (status === 'RIDER_ASSIGNED') return 1;
-  if (status === 'PICKED_UP' || status === 'ON_THE_WAY' || status === 'ARRIVED') return 2;
-  if (status === 'DELIVERED' || status === 'COMPLETED') return 3;
+  if (status === 'PICKED_UP' || status === 'ON_THE_WAY') return 2;
+  if (status === 'ARRIVED') return 3;
+  if (status === 'DELIVERED' || status === 'COMPLETED') return 4;
   return -1;
 }
 
 /** Map rider UI actions to API order statuses */
 export function statusForRiderAction(action: RiderDeliveryAction): string | null {
   if (action === 'pickup') return 'PICKED_UP';
-  if (action === 'arrived') return 'ON_THE_WAY';
+  if (action === 'arrived') return 'ARRIVED';
   if (action === 'complete') return 'DELIVERED';
   return null;
 }
