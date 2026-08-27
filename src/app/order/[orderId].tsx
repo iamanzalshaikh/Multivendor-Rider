@@ -196,17 +196,6 @@ export default function OrderDetailScreen() {
       </View>
 
       <View style={styles.mapSection}>
-          <DeliveryMap
-            restaurant={restaurantCoord}
-            customer={customerCoord}
-            rider={riderCoord}
-            riderHeading={riderGps?.heading}
-            routePath={routeQ.data}
-            routeLoading={routeQ.isFetching && !routeQ.data}
-            followRider={isActiveTrip}
-            orderStatus={order.orderStatus}
-            height={220}
-          />
         <Pressable
           onPress={() => router.push(`/order/map/${orderId}` as never)}
           style={[styles.expandMapBtn, { backgroundColor: theme.backgroundElement, borderColor: theme.border }]}
@@ -265,7 +254,7 @@ export default function OrderDetailScreen() {
           </View>
           <View style={styles.totalsRow}>
             <ThemedText type="small" themeColor="textSecondary">
-              Your earning
+              Delivery fee
             </ThemedText>
             <ThemedText style={[styles.earnValue, { color: theme.partner }]}>
               +{formatJmd(riderEarningForOrder(order))}

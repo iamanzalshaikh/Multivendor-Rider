@@ -108,10 +108,6 @@ function ActiveTripItem({ orderId }: { orderId: string }) {
         order={activeOrderQ.data}
         busy={actionMut.isPending}
         onAction={(action) => {
-          if (action !== 'complete' && activeOrderIds && activeOrderIds.length > 1) {
-            Alert.alert('Batch Update Required', 'You have multiple active orders. Please use the Batch Update button below to update their statuses all at once.');
-            return false;
-          }
           actionMut.mutate({ id: orderId, action });
         }}
       />
@@ -146,6 +142,9 @@ export default function TripScreen() {
     },
     onError: (e) => {
       toast.error(e instanceof Error ? e.message : 'Try again', 'Update Failed');
+    },
+    onSettled: () => {
+      setShowBatchModal(false);
     },
   });
 
