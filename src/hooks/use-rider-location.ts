@@ -14,6 +14,8 @@ async function safeStopBackgroundLocation(): Promise<void> {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const TaskManager = require('expo-task-manager') as typeof import('expo-task-manager');
     if (!TaskManager.isTaskDefined(RIDER_LOCATION_TASK)) return;
+    const isRegistered = await TaskManager.isTaskRegisteredAsync(RIDER_LOCATION_TASK);
+    if (!isRegistered) return;
     const started = await Location.hasStartedLocationUpdatesAsync(RIDER_LOCATION_TASK);
     if (started) await Location.stopLocationUpdatesAsync(RIDER_LOCATION_TASK);
   } catch {
@@ -30,34 +32,38 @@ export function useRiderLocationTracking(enabled: boolean) {
     let alive = true;
 
     (async () => {
-      // Always tear down leftover tracking (old builds left the orange notification).
-      await safeStopBackgroundLocation();
-      if (!V1_LIVE_LOCATION_ENABLED || !enabled || !alive) return;
+      try {
+        // Always tear down leftover tracking (old builds left the orange notification).
+        await safeStopBackgroundLocation();
+        if (!V1_LIVE_LOCATION_ENABLED || !enabled || !alive) return;
 
-      ensureRiderLocationTaskRegistered();
+        ensureRiderLocationTaskRegistered();
 
-      const { status: fgStatus } = await Location.requestForegroundPermissionsAsync();
-      if (fgStatus !== 'granted' || !alive) return;
+        const { status: fgStatus } = await Location.requestForegroundPermissionsAsync();
+        if (fgStatus !== 'granted' || !alive) return;
 
-      await Location.requestBackgroundPermissionsAsync();
-      if (!alive) return;
+        await Location.requestBackgroundPermissionsAsync();
+        if (!alive) return;
 
-      ensureRiderLocationTaskRegistered();
+        ensureRiderLocationTaskRegistered();
 
-      const started = await Location.hasStartedLocationUpdatesAsync(RIDER_LOCATION_TASK);
-      if (started || !alive) return;
+        const started = await Location.hasStartedLocationUpdatesAsync(RIDER_LOCATION_TASK);
+        if (started || !alive) return;
 
-      await Location.startLocationUpdatesAsync(RIDER_LOCATION_TASK, {
-        accuracy: Location.Accuracy.High,
-        distanceInterval: 25,
-        timeInterval: 15000,
-        showsBackgroundLocationIndicator: true,
-        foregroundService: {
-          notificationTitle: 'SD Services Rider',
-          notificationBody: 'On an active delivery',
-          notificationColor: '#ff5a00',
-        },
-      });
+        await Location.startLocationUpdatesAsync(RIDER_LOCATION_TASK, {
+          accuracy: Location.Accuracy.High,
+          distanceInterval: 25,
+          timeInterval: 15000,
+          showsBackgroundLocationIndicator: true,
+          foregroundService: {
+            notificationTitle: 'SD Services Rider',
+            notificationBody: 'On an active delivery',
+            notificationColor: '#ff5a00',
+          },
+        });
+      } catch (err) {
+        console.warn('[use-rider-location] Failed to start/stop location tracking:', err);
+      }
     })();
 
     return () => {
