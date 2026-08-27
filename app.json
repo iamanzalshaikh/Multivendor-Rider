@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "SD Services Rider",
-    "slug": "riderApp",
+    "slug": "HerRidez-Frontend",
     "description": "SD Services Rider — campus delivery partner app",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -33,10 +33,6 @@
         "android.permission.POST_NOTIFICATIONS",
         "android.permission.FOREGROUND_SERVICE",
         "android.permission.FOREGROUND_SERVICE_LOCATION",
-        "android.permission.ACCESS_COARSE_LOCATION",
-        "android.permission.ACCESS_FINE_LOCATION",
-        "android.permission.FOREGROUND_SERVICE",
-        "android.permission.FOREGROUND_SERVICE_LOCATION",
         "android.permission.RECORD_AUDIO"
       ]
     },
@@ -44,6 +40,9 @@
       "bundleIdentifier": "com.herridez.riderApp",
       "config": {
         "googleMapsApiKey": "AIzaSyB9sygTijkwxyA0y4prphn4Po2YHipyMk0"
+      },
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
       }
     },
     "plugins": [
