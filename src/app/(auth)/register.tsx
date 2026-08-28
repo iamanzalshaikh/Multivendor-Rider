@@ -168,8 +168,7 @@ export default function RegisterScreen() {
         contentContainerStyle={[styles.scrollContent, { paddingBottom: scrollBottomPad }]}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
-        showsVerticalScrollIndicator={false}
-        automaticallyAdjustKeyboardInsets={Platform.OS === 'ios'}>
+        showsVerticalScrollIndicator={false}>
         {!keyboardOpen ? (
           <View style={styles.hero}>
             <ThemedText style={styles.heroBadge}>SD Services Partner</ThemedText>
