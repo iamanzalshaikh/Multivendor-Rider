@@ -379,7 +379,14 @@ export type RiderReviewItem = {
 
 export async function fetchMyRiderReviews() {
   const body = await apiFetch<
-    ApiEnvelope<{ items: RiderReviewItem[]; total: number; page: number; totalPages: number }>
+    ApiEnvelope<{
+      items: RiderReviewItem[];
+      total: number;
+      page: number;
+      totalPages: number;
+      averageRating?: number;
+      ratingDistribution?: Record<1 | 2 | 3 | 4 | 5, number>;
+    }>
   >('/riders/me/reviews');
   return body.data!;
 }

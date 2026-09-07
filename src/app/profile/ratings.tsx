@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { ActivityIndicator, FlatList, Pressable, StyleSheet, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
@@ -8,6 +9,11 @@ import { ThemedText } from '@/components/themed-text';
 import { cardStyle, Layout } from '@/constants/layout';
 import { Fonts, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
+import {
+  ratingChartRows,
+  ratingDistributionTotal,
+  normalizeRatingDistribution,
+} from '@/lib/ratingDistribution';
 import { fetchMyRiderReviews } from '@/services/riders';
 
 const STAR_YELLOW = '#FBBF24';
@@ -36,6 +42,10 @@ export default function RiderRatingsScreen() {
   });
 
   const items = q.data?.items ?? [];
+  const dist = normalizeRatingDistribution(q.data?.ratingDistribution);
+  const total = ratingDistributionTotal(dist) || q.data?.total || items.length;
+  const average = Number(q.data?.averageRating ?? 0);
+  const chartRows = useMemo(() => ratingChartRows(dist, total), [dist, total]);
 
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: theme.background }]} edges={['top']}>
@@ -56,6 +66,30 @@ export default function RiderRatingsScreen() {
           data={items}
           keyExtractor={(item, i) => String(item.id ?? item._id ?? i)}
           contentContainerStyle={styles.list}
+          ListHeaderComponent={
+            total > 0 ? (
+              <View style={[styles.summary, cardStyle, { backgroundColor: theme.backgroundElement }]}>
+                <View style={styles.summaryTop}>
+                  <ThemedText style={styles.avg}>{average.toFixed(1)}</ThemedText>
+                  <Stars value={Math.round(average)} />
+                  <ThemedText type="small" themeColor="textSecondary">
+                    {total} rating{total === 1 ? '' : 's'}
+                  </ThemedText>
+                </View>
+                <View style={{ marginTop: 12, gap: 6 }}>
+                  {chartRows.map(({ star, count, pct }) => (
+                    <View key={star} style={styles.barRow}>
+                      <ThemedText style={styles.barLabel}>{star}</ThemedText>
+                      <View style={[styles.barBg, { backgroundColor: theme.border }]}>
+                        <View style={[styles.barFill, { width: `${pct}%` }]} />
+                      </View>
+                      <ThemedText style={styles.barCount}>{count}</ThemedText>
+                    </View>
+                  ))}
+                </View>
+              </View>
+            ) : null
+          }
           ListEmptyComponent={
             <View style={[styles.empty, cardStyle, { backgroundColor: theme.backgroundElement }]}>
               <Ionicons name="star-outline" size={32} color={STAR_YELLOW} />
@@ -102,7 +136,7 @@ export default function RiderRatingsScreen() {
                   ) : null}
                 </View>
                 {comment ? (
-                  <ThemedText type="small" themeColor="textSecondary" style={styles.comment}>
+                  <ThemedText type="small" themeColor="textSecondary" style={{ marginTop: 8 }}>
                     {comment}
                   </ThemedText>
                 ) : null}
@@ -120,15 +154,31 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
     paddingHorizontal: Layout.screenPadding,
-    paddingBottom: Spacing.two,
+    paddingVertical: Spacing.two,
   },
-  backBtn: { width: 38, height: 38, alignItems: 'center', justifyContent: 'center' },
-  headerTitle: { flex: 1, textAlign: 'center', fontFamily: Fonts.extraBold, fontSize: 16 },
+  backBtn: {
+    width: 38,
+    height: 38,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerTitle: { fontFamily: Fonts.bold, fontSize: 17 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  list: { padding: Layout.screenPadding, gap: Spacing.two, paddingBottom: Spacing.five },
-  card: { padding: Spacing.three, marginBottom: Spacing.two },
-  row: { flexDirection: 'row', alignItems: 'flex-start', gap: Spacing.two },
+  list: { padding: Layout.screenPadding, paddingBottom: 40, gap: 10 },
+  summary: { padding: 16, marginBottom: 8 },
+  summaryTop: { alignItems: 'flex-start', gap: 4 },
+  avg: { fontSize: 32, fontFamily: Fonts.bold },
+  barRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  barLabel: { width: 12, fontSize: 11 },
+  barBg: { flex: 1, height: 6, borderRadius: 3, overflow: 'hidden' },
+  barFill: { height: '100%', borderRadius: 3, backgroundColor: STAR_YELLOW },
+  barCount: { width: 24, fontSize: 11, textAlign: 'right' },
+  empty: { padding: 24, alignItems: 'center', gap: 8 },
+  emptyTitle: { fontFamily: Fonts.bold, fontSize: 16, marginTop: 4 },
+  card: { padding: 14 },
+  row: { flexDirection: 'row', gap: 10, alignItems: 'flex-start' },
   avatar: {
     width: 36,
     height: 36,
@@ -137,12 +187,4 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   name: { fontFamily: Fonts.bold, fontSize: 14 },
-  comment: { marginTop: Spacing.two, lineHeight: 18 },
-  empty: {
-    marginTop: Spacing.four,
-    padding: Spacing.four,
-    alignItems: 'center',
-    gap: Spacing.two,
-  },
-  emptyTitle: { fontFamily: Fonts.bold, fontSize: 16 },
 });
