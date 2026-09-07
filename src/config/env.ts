@@ -3,12 +3,12 @@ import { Platform } from 'react-native';
 
 const isProduction = !__DEV__;
 
-/** Render production backend — used for release APK / EAS builds */
+/** CASE Delivery API — production host: api.sdservices.cloud */
 export const BACKEND_URLS = {
   production: {
-    base: 'https://zomato-backend-pt66.onrender.com',
-    api: 'https://zomato-backend-pt66.onrender.com/api/v1',
-    socket: 'https://zomato-backend-pt66.onrender.com',
+    base: 'https://api.sdservices.cloud',
+    api: 'https://api.sdservices.cloud/api/v1',
+    socket: 'https://api.sdservices.cloud',
   },
   /** Local: http://<YOUR_PC_LAN_IP>:5000 — set EXPO_PUBLIC_* in .env for dev */
   localPort: 5000,

@@ -11,14 +11,14 @@
     "preview": {
       "distribution": "internal",
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://zomato-backend-pt66.onrender.com/api/v1",
-        "EXPO_PUBLIC_SOCKET_URL": "https://zomato-backend-pt66.onrender.com"
+        "EXPO_PUBLIC_API_URL": "https://api.sdservices.cloud/api/v1",
+        "EXPO_PUBLIC_SOCKET_URL": "https://api.sdservices.cloud"
       }
     },
     "production": {
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://zomato-backend-pt66.onrender.com/api/v1",
-        "EXPO_PUBLIC_SOCKET_URL": "https://zomato-backend-pt66.onrender.com"
+        "EXPO_PUBLIC_API_URL": "https://api.sdservices.cloud/api/v1",
+        "EXPO_PUBLIC_SOCKET_URL": "https://api.sdservices.cloud"
       }
     }
   },

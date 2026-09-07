@@ -1,4 +1,4 @@
-import { View, StyleSheet, Pressable, Alert, Image } from 'react-native';
+import { View, StyleSheet, Pressable, Alert, Image, Linking } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -8,6 +8,7 @@ import { ThemedText } from '@/components/themed-text';
 import { VerificationBanner } from '@/components/verification-banner';
 import { RiderProfileSkeleton } from '@/components/skeleton';
 import { cardStyle, Layout } from '@/constants/layout';
+import { LEGAL_SUPPORT_EMAIL, LegalUrls } from '@/constants/legal';
 import { Fonts, Spacing } from '@/constants/theme';
 import { useRiderProfile } from '@/hooks/use-rider-profile';
 import { useTheme } from '@/hooks/use-theme';
@@ -16,6 +17,8 @@ import { formatJmd } from '@/lib/money';
 import { logout } from '@/lib/auth';
 import { disconnectSocket } from '@/lib/socketClient';
 import { ENV_INFO } from '@/config/env';
+import { deleteAccount } from '@/services/account';
+import { extractApiErrorMessage } from '@/lib/apiErrors';
 import type { VerificationStatus } from '@/types/rider';
 
 function InfoRow({
@@ -90,6 +93,72 @@ export default function ProfileScreen() {
         },
       },
     ]);
+  }
+
+  function onDeleteAccount() {
+    Alert.alert(
+      'Delete Account',
+      `This permanently deletes your rider account and personal data (KYC, bank details, sessions). Order/payment records may be retained for legal compliance.\n\nWeb: ${LegalUrls.accountDeletion}\nOr email ${LEGAL_SUPPORT_EMAIL}`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Open web form',
+          onPress: () => void Linking.openURL(LegalUrls.accountDeletion),
+        },
+        {
+          text: 'Delete now',
+          style: 'destructive',
+          onPress: () => {
+            Alert.alert('Confirm deletion', 'This cannot be undone. Delete your account?', [
+              { text: 'Cancel', style: 'cancel' },
+              {
+                text: 'Delete',
+                style: 'destructive',
+                onPress: async () => {
+                  try {
+                    disconnectSocket();
+                    await deleteAccount();
+                    await logout();
+                    router.replace('/(auth)');
+                  } catch (e) {
+                    Alert.alert('Could not delete', extractApiErrorMessage(e, 'Try again or use the web form.'));
+                  }
+                },
+              },
+            ]);
+          },
+        },
+      ],
+    );
+  }
+
+  function ActionRow({
+    icon,
+    color,
+    title,
+    subtitle,
+    onPress,
+  }: {
+    icon: keyof typeof Ionicons.glyphMap;
+    color: string;
+    title: string;
+    subtitle: string;
+    onPress: () => void;
+  }) {
+    return (
+      <Pressable
+        onPress={onPress}
+        style={[styles.actionCard, cardStyle, { backgroundColor: theme.backgroundElement }]}>
+        <Ionicons name={icon} size={22} color={color} />
+        <View style={styles.actionText}>
+          <ThemedText style={styles.actionTitle}>{title}</ThemedText>
+          <ThemedText type="small" themeColor="textSecondary">
+            {subtitle}
+          </ThemedText>
+        </View>
+        <Ionicons name="chevron-forward" size={18} color={theme.textSecondary} />
+      </Pressable>
+    );
   }
 
   return (
@@ -184,37 +253,48 @@ export default function ProfileScreen() {
             <Ionicons name="chevron-forward" size={18} color={theme.textSecondary} />
           </Pressable>
 
-          <Pressable
+          <ActionRow
+            icon="notifications-outline"
+            color={theme.primary}
+            title="Notifications"
+            subtitle="Delivery alerts and account updates"
             onPress={() => router.push('/notifications' as never)}
-            style={[styles.actionCard, cardStyle, { backgroundColor: theme.backgroundElement }]}>
-            <Ionicons name="notifications-outline" size={22} color={theme.primary} />
-            <View style={styles.actionText}>
-              <ThemedText style={styles.actionTitle}>Notifications</ThemedText>
-              <ThemedText type="small" themeColor="textSecondary">
-                Delivery alerts and account updates
-              </ThemedText>
-            </View>
-            <Ionicons name="chevron-forward" size={18} color={theme.textSecondary} />
-          </Pressable>
+          />
 
-          <Pressable
+          <ActionRow
+            icon="document-text-outline"
+            color={theme.primary}
+            title="KYC & bank details"
+            subtitle="Upload your verification documents"
             onPress={() => router.push('/profile/edit' as never)}
-            style={[styles.actionCard, cardStyle, { backgroundColor: theme.backgroundElement }]}>
-            <Ionicons name="document-text-outline" size={22} color={theme.primary} />
-            <View style={styles.actionText}>
-              <ThemedText style={styles.actionTitle}>KYC & bank details</ThemedText>
-              <ThemedText type="small" themeColor="textSecondary">
-                Upload your verification documents
-              </ThemedText>
-            </View>
-            <Ionicons name="chevron-forward" size={18} color={theme.textSecondary} />
-          </Pressable>
+          />
+
+          <ActionRow
+            icon="shield-outline"
+            color={theme.primary}
+            title="Privacy Policy"
+            subtitle="How we handle partner data"
+            onPress={() => router.push('/privacy' as never)}
+          />
+
+          <ActionRow
+            icon="reader-outline"
+            color={theme.primary}
+            title="Terms of Service"
+            subtitle="Partner rules and delivery terms"
+            onPress={() => router.push('/terms' as never)}
+          />
         </>
       )}
 
-      <Pressable onPress={onLogout} style={[styles.logout, { borderColor: theme.danger }]}>
-        <Ionicons name="log-out-outline" size={18} color={theme.danger} />
-        <ThemedText style={{ color: theme.danger, fontFamily: Fonts.bold, fontSize: 15 }}>Log out</ThemedText>
+      <Pressable onPress={onDeleteAccount} style={[styles.logout, { borderColor: theme.danger, marginTop: Spacing.three }]}>
+        <Ionicons name="trash-outline" size={18} color={theme.danger} />
+        <ThemedText style={{ color: theme.danger, fontFamily: Fonts.bold, fontSize: 15 }}>Delete Account</ThemedText>
+      </Pressable>
+
+      <Pressable onPress={onLogout} style={[styles.logout, { borderColor: theme.border }]}>
+        <Ionicons name="log-out-outline" size={18} color={theme.text} />
+        <ThemedText style={{ color: theme.text, fontFamily: Fonts.bold, fontSize: 15 }}>Log out</ThemedText>
       </Pressable>
 
       {__DEV__ ? (

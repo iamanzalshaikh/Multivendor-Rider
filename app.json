@@ -2,12 +2,18 @@
   "expo": {
     "name": "SD Services Rider",
     "slug": "riderApp",
-    "description": "SD Services Rider — campus delivery partner app",
+    "description": "SD Services Rider — campus delivery partner app for CASE Jamaica",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "riderapp",
     "userInterfaceStyle": "automatic",
+    "notification": {
+      "icon": "./assets/images/icon.png",
+      "color": "#FF5A00",
+      "androidMode": "default",
+      "androidCollapsedTitle": "SD Services Rider"
+    },
     "android": {
       "softwareKeyboardLayoutMode": "resize",
       "adaptiveIcon": {
@@ -16,34 +22,20 @@
         "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
-      "package": "com.herridez.riderApp",
+      "package": "com.edenzatech.sdservice.rider",
       "googleServicesFile": "./google-services.json",
-      "config": {
-        "googleMaps": {
-          "apiKey": "AIzaSyAp9uH5jjHOB4jJonsmLP43dImnug2WJ9E"
-        }
-      },
       "permissions": [
         "android.permission.ACCESS_COARSE_LOCATION",
         "android.permission.ACCESS_FINE_LOCATION",
-        "android.permission.ACCESS_BACKGROUND_LOCATION",
         "android.permission.CAMERA",
         "android.permission.READ_MEDIA_IMAGES",
-        "android.permission.READ_EXTERNAL_STORAGE",
-        "android.permission.POST_NOTIFICATIONS",
-        "android.permission.FOREGROUND_SERVICE",
-        "android.permission.FOREGROUND_SERVICE_LOCATION",
-        "android.permission.ACCESS_COARSE_LOCATION",
-        "android.permission.ACCESS_FINE_LOCATION",
-        "android.permission.FOREGROUND_SERVICE",
-        "android.permission.FOREGROUND_SERVICE_LOCATION",
-        "android.permission.RECORD_AUDIO"
+        "android.permission.POST_NOTIFICATIONS"
       ]
     },
     "ios": {
-      "bundleIdentifier": "com.herridez.riderApp",
-      "config": {
-        "googleMapsApiKey": "AIzaSyB9sygTijkwxyA0y4prphn4Po2YHipyMk0"
+      "bundleIdentifier": "com.edenzatech.sdservice.rider",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
       }
     },
     "plugins": [
@@ -62,25 +54,16 @@
       ],
       "expo-router",
       [
-        "react-native-maps",
-        {
-          "androidGoogleMapsApiKey": "AIzaSyAp9uH5jjHOB4jJonsmLP43dImnug2WJ9E",
-          "iosGoogleMapsApiKey": "AIzaSyB9sygTijkwxyA0y4prphn4Po2YHipyMk0"
-        }
-      ],
-      [
         "expo-location",
         {
-          "locationWhenInUsePermission": "SD Services Rider may use your location for delivery navigation.",
-          "locationAlwaysAndWhenInUsePermission": "SD Services Rider may use your location while on an active delivery.",
-          "isAndroidForegroundServiceEnabled": false
+          "locationWhenInUsePermission": "SD Services Rider uses your location for delivery navigation while on an active trip."
         }
       ],
       [
         "expo-notifications",
         {
           "icon": "./assets/images/icon.png",
-          "color": "#ff5a00"
+          "color": "#FF5A00"
         }
       ],
       [
@@ -107,13 +90,6 @@
     "extra": {
       "eas": {
         "projectId": "6d923d26-0ac5-4ec4-9d6e-626beaa7761d"
-      },
-      "googleMaps": {
-        "android": "AIzaSyAp9uH5jjHOB4jJonsmLP43dImnug2WJ9E",
-        "ios": "AIzaSyB9sygTijkwxyA0y4prphn4Po2YHipyMk0",
-        "geocoding": "AIzaSyCxoK3LptaTG8r4VJBPf9LH_bdCBbTenJI",
-        "places": "AIzaSyA8dfXiI-1J9373yl18v8NXTj8UNhTZUlg",
-        "routes": "AIzaSyBJDtg3umA1eVaG2BxfAgykE7_4taJN5Vc"
       }
     },
     "owner": "herridez"

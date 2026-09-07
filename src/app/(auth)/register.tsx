@@ -8,6 +8,7 @@ import {
   ActivityIndicator,
   Platform,
   Image,
+  Linking,
   type TextInput as TextInputType,
 } from 'react-native';
 import { useRouter } from 'expo-router';
@@ -17,6 +18,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 
 import { ThemedText } from '@/components/themed-text';
 import { cardStyle, Layout } from '@/constants/layout';
+import { LegalUrls } from '@/constants/legal';
 import { Brand, Fonts, Spacing } from '@/constants/theme';
 import { useKeyboardInset } from '@/hooks/use-keyboard-inset';
 import { useTheme } from '@/hooks/use-theme';
@@ -317,17 +319,17 @@ export default function RegisterScreen() {
                 </View>
               </View>
               <View style={styles.docCard}>
-                <ThemedText style={styles.docHeading}>Aadhaar card (optional)</ThemedText>
+                <ThemedText style={styles.docHeading}>National ID (optional)</ThemedText>
                 <View style={styles.docActionsRow}>
                   <Pressable
                     style={[styles.docButton, { borderColor: theme.border }]}
-                    onPress={() => pickDoc('aadhaar card', setAadhaarCardUri, 'gallery')}>
+                    onPress={() => pickDoc('National ID', setAadhaarCardUri, 'gallery')}>
                     <Ionicons name="images-outline" size={16} color={theme.textSecondary} />
                     <ThemedText type="small">Gallery</ThemedText>
                   </Pressable>
                   <Pressable
                     style={[styles.docButton, { borderColor: theme.border }]}
-                    onPress={() => pickDoc('aadhaar card', setAadhaarCardUri, 'camera')}>
+                    onPress={() => pickDoc('National ID', setAadhaarCardUri, 'camera')}>
                     <Ionicons name="camera-outline" size={16} color={theme.textSecondary} />
                     <ThemedText type="small">Camera</ThemedText>
                   </Pressable>
@@ -387,6 +389,28 @@ export default function RegisterScreen() {
               </ThemedText>
             </View>
           ) : null}
+
+          <View style={styles.legalBox}>
+            <ThemedText type="small" themeColor="textSecondary" style={{ textAlign: 'center' }}>
+              By continuing, you agree to our
+            </ThemedText>
+            <View style={styles.legalRow}>
+              <Pressable onPress={() => void Linking.openURL(LegalUrls.terms)} hitSlop={8}>
+                <ThemedText type="small" style={[styles.legalLink, { color: theme.primary }]}>
+                  Terms of Service
+                </ThemedText>
+              </Pressable>
+              <ThemedText type="small" themeColor="textSecondary">
+                {' '}
+                and{' '}
+              </ThemedText>
+              <Pressable onPress={() => void Linking.openURL(LegalUrls.privacy)} hitSlop={8}>
+                <ThemedText type="small" style={[styles.legalLink, { color: theme.primary }]}>
+                  Privacy Policy
+                </ThemedText>
+              </Pressable>
+            </View>
+          </View>
 
           <View style={styles.footerActions}>
             {step > 1 ? (
@@ -544,6 +568,22 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 8,
     marginTop: Spacing.two,
+  },
+  legalBox: {
+    marginTop: Spacing.three,
+    marginBottom: Spacing.two,
+    alignItems: 'center',
+    gap: 4,
+  },
+  legalRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  legalLink: {
+    fontFamily: Fonts.bold,
+    textDecorationLine: 'underline',
   },
   button: {
     borderRadius: Layout.buttonRadius,

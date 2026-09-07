@@ -8,12 +8,14 @@ import {
   Platform,
   ScrollView,
   ActivityIndicator,
+  Linking,
 } from 'react-native';
 import { Link, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 
 import { ThemedText } from '@/components/themed-text';
 import { Layout, cardStyle } from '@/constants/layout';
+import { LegalUrls } from '@/constants/legal';
 import { Brand, Fonts, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { extractApiErrorMessage } from '@/lib/apiErrors';
@@ -118,6 +120,28 @@ export default function LoginScreen() {
               </Link>
             </ThemedText>
 
+            <View style={styles.legalBox}>
+              <ThemedText type="small" themeColor="textSecondary" style={styles.legalLine}>
+                By continuing, you agree to our
+              </ThemedText>
+              <View style={styles.legalRow}>
+                <Pressable onPress={() => void Linking.openURL(LegalUrls.terms)} hitSlop={8}>
+                  <ThemedText type="small" style={[styles.legalLink, { color: theme.primary }]}>
+                    Terms of Service
+                  </ThemedText>
+                </Pressable>
+                <ThemedText type="small" themeColor="textSecondary">
+                  {' '}
+                  and{' '}
+                </ThemedText>
+                <Pressable onPress={() => void Linking.openURL(LegalUrls.privacy)} hitSlop={8}>
+                  <ThemedText type="small" style={[styles.legalLink, { color: theme.primary }]}>
+                    Privacy Policy
+                  </ThemedText>
+                </Pressable>
+              </View>
+            </View>
+
             {__DEV__ ? (
               <ThemedText type="small" themeColor="textSecondary" style={styles.devHint}>
                 API: {ENV_INFO.apiUrl}
@@ -177,5 +201,9 @@ const styles = StyleSheet.create({
   },
   buttonText: { color: '#fff', fontFamily: Fonts.extraBold, fontSize: 16 },
   footer: { textAlign: 'center', marginTop: Spacing.three },
+  legalBox: { marginTop: Spacing.three, alignItems: 'center', gap: 4 },
+  legalLine: { textAlign: 'center' },
+  legalRow: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', alignItems: 'center' },
+  legalLink: { fontFamily: Fonts.bold, textDecorationLine: 'underline' },
   devHint: { textAlign: 'center', marginTop: Spacing.two, fontSize: 11 },
 });

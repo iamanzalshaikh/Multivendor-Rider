@@ -98,13 +98,23 @@ export default function HomeScreen() {
 
   const onlineMut = useMutation({
     mutationFn: (online: boolean) => updateRiderOnlineStatus(online),
+    onMutate: async (online) => {
+      const prev = rider?.onlineStatus;
+      if (rider) {
+        setRider({ ...rider, onlineStatus: online });
+      }
+      return { prev };
+    },
     onSuccess: (updated) => {
       setRider(updated);
       void emitRiderOnlineStatus(updated.onlineStatus);
       invalidateRiderProfile(qc);
       invalidateAvailableOrders(qc);
     },
-    onError: (e) => {
+    onError: (e, _, ctx) => {
+      if (rider && ctx?.prev !== undefined) {
+        setRider({ ...rider, onlineStatus: ctx.prev });
+      }
       if (e instanceof Error && e.message === 'SHIFT_REQUIRED') {
         toast.warning('Only admin can start your shift. Please contact admin.', 'Shift Required');
       } else {
@@ -262,9 +272,6 @@ export default function HomeScreen() {
               </ThemedText>
             </View>
           </View>
-          {onlineMut.isPending ? (
-            <ActivityIndicator color={theme.partner} />
-          ) : (
             <Switch
               value={online}
               disabled={!isApproved}
@@ -273,7 +280,6 @@ export default function HomeScreen() {
               thumbColor="#fff"
               ios_backgroundColor={theme.border}
             />
-          )}
         </Pressable>
 
         <VerificationBanner status={verificationStatus as VerificationStatus} />

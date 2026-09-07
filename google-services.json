@@ -1,21 +1,21 @@
 {
   "project_info": {
-    "project_number": "452053591087",
-    "project_id": "food-delivery-platform-7635e",
-    "storage_bucket": "food-delivery-platform-7635e.firebasestorage.app"
+    "project_number": "250895016478",
+    "project_id": "sd-services-rider",
+    "storage_bucket": "sd-services-rider.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:452053591087:android:774b894dc55451993692da",
+        "mobilesdk_app_id": "1:250895016478:android:1112992fe7db1055e6840f",
         "android_client_info": {
-          "package_name": "com.herridez.riderApp"
+          "package_name": "com.edenzatech.sdservice.rider"
         }
       },
       "oauth_client": [],
       "api_key": [
         {
-          "current_key": "AIzaSyDfCgL-VF7pIOjiCQIFej4CxnZCi-LKayo"
+          "current_key": "AIzaSyDJQeztT23z6pa3IKPjmb85DLO0QEvyIPo"
         }
       ],
       "services": {

@@ -21,6 +21,7 @@ function hasAnyCoord(props: DeliveryMapProps) {
   );
 }
 
+/** Status placeholder — Google Maps is not used in this app. */
 export function DeliveryMapFallback({
   customer,
   restaurant,
@@ -28,8 +29,8 @@ export function DeliveryMapFallback({
   height = 220,
 }: DeliveryMapProps) {
   const message = !hasAnyCoord({ customer, restaurant, rider })
-    ? 'Map will appear when pickup and drop coordinates are available.'
-    : 'Rebuild with "npx expo run:android" for the full Google Map.';
+    ? 'Pickup and drop details appear when the order is ready for navigation.'
+    : 'Use order status and address details below for this delivery.';
 
   return (
     <View style={[styles.placeholder, { height }]}>
