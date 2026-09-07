@@ -18,6 +18,8 @@ export default function SplashScreen() {
   const scheme = useColorScheme();
   const isDark = scheme === 'dark';
   const titleColor = isDark ? '#FFFFFF' : '#111111';
+  const muted = isDark ? '#A0A0A0' : '#666666';
+  const care = isDark ? '#FFFFFF' : '#FF5A00';
 
   return (
     <View style={[styles.root, { backgroundColor: isDark ? '#000000' : '#FFFFFF' }]}>
@@ -43,11 +45,9 @@ export default function SplashScreen() {
 
             <Text style={[styles.portalBadge, { color: '#FF5A00' }]}>Rider Portal</Text>
 
-            <Text style={[styles.tagline, { color: isDark ? '#A0A0A0' : '#666666' }]}>
+            <Text style={[styles.tagline, { color: muted }]}>
               Anything, Anytime, Delivered with{' '}
-              <Text style={[styles.careHighlight, { color: isDark ? '#FFFFFF' : '#FF5A00' }]}>
-                Care
-              </Text>
+              <Text style={[styles.careHighlight, { color: care }]}>Care</Text>
             </Text>
           </Animated.View>
         </Animated.View>

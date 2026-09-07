@@ -6,10 +6,19 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
+    "splash": {
+      "image": "./assets/images/splash-icon-light.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#FFFFFF",
+      "dark": {
+        "image": "./assets/images/splash-icon-dark.png",
+        "backgroundColor": "#000000"
+      }
+    },
     "scheme": "riderapp",
     "userInterfaceStyle": "automatic",
     "notification": {
-      "icon": "./assets/images/icon.png",
+      "icon": "./assets/images/notification-icon.png",
       "color": "#FF5A00",
       "androidMode": "default",
       "androidCollapsedTitle": "SD Services Rider"
@@ -17,10 +26,19 @@
     "android": {
       "softwareKeyboardLayoutMode": "resize",
       "adaptiveIcon": {
-        "backgroundColor": "#ff5a00",
+        "backgroundColor": "#FFFFFF",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
         "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
+      },
+      "splash": {
+        "image": "./assets/images/splash-icon-light.png",
+        "resizeMode": "contain",
+        "backgroundColor": "#FFFFFF",
+        "dark": {
+          "image": "./assets/images/splash-icon-dark.png",
+          "backgroundColor": "#000000"
+        }
       },
       "package": "com.edenzatech.sdservice.rider",
       "googleServicesFile": "./google-services.json",
@@ -62,7 +80,7 @@
       [
         "expo-notifications",
         {
-          "icon": "./assets/images/icon.png",
+          "icon": "./assets/images/notification-icon.png",
           "color": "#FF5A00"
         }
       ],
@@ -76,10 +94,13 @@
       [
         "expo-splash-screen",
         {
-          "backgroundColor": "#ff5a00",
-          "android": {
-            "image": "./assets/images/splash-icon.png",
-            "imageWidth": 76
+          "backgroundColor": "#FFFFFF",
+          "image": "./assets/images/splash-icon-light.png",
+          "imageWidth": 280,
+          "resizeMode": "contain",
+          "dark": {
+            "backgroundColor": "#000000",
+            "image": "./assets/images/splash-icon-dark.png"
           }
         }
       ]

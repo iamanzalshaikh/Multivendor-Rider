@@ -40,7 +40,7 @@ export default function RootLayout() {
     }
   }, [fontsReady]);
 
-  // Blank frame only while fonts load — branded splash lives in index (once).
+  // Match system light/dark while fonts load
   if (!fontsReady) {
     return (
       <GestureHandlerRootView style={styles.root}>
