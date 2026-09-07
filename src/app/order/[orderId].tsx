@@ -195,17 +195,19 @@ export default function OrderDetailScreen() {
         <View style={{ width: 32 }} />
       </View>
 
-      <View style={styles.mapSection}>
-        <Pressable
-          onPress={() => router.push(`/order/map/${orderId}` as never)}
-          style={[styles.expandMapBtn, { backgroundColor: theme.backgroundElement, borderColor: theme.border }]}
-        >
-          <Ionicons name="expand-outline" size={16} color={theme.primary} />
-          <ThemedText type="small" style={{ color: theme.primary, fontFamily: Fonts.bold }}>
-            Open full trip map
-          </ThemedText>
-        </Pressable>
-      </View>
+      {!isAvailable ? (
+        <View style={styles.mapSection}>
+          <Pressable
+            onPress={() => router.push(`/order/map/${orderId}` as never)}
+            style={[styles.expandMapBtn, { backgroundColor: theme.backgroundElement, borderColor: theme.border }]}
+          >
+            <Ionicons name="expand-outline" size={16} color={theme.primary} />
+            <ThemedText type="small" style={{ color: theme.primary, fontFamily: Fonts.bold }}>
+              Open full trip map
+            </ThemedText>
+          </Pressable>
+        </View>
+      ) : null}
 
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         <View style={styles.progressSection}>

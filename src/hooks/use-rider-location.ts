@@ -10,6 +10,10 @@ import {
 export const V1_LIVE_LOCATION_ENABLED = false;
 
 async function safeStopBackgroundLocation(): Promise<void> {
+  // Do not touch expo-task-manager while live tracking is disabled.
+  // Expo Go / JS-only reloads do not ship ExpoTaskManager and would crash on require().
+  if (!V1_LIVE_LOCATION_ENABLED) return;
+
   try {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const TaskManager = require('expo-task-manager') as typeof import('expo-task-manager');
@@ -19,13 +23,13 @@ async function safeStopBackgroundLocation(): Promise<void> {
     const started = await Location.hasStartedLocationUpdatesAsync(RIDER_LOCATION_TASK);
     if (started) await Location.stopLocationUpdatesAsync(RIDER_LOCATION_TASK);
   } catch {
-    // Ignore TaskNotFound or transient native-state race during app boot/reload.
+    // Ignore TaskNotFound or missing native module during boot/reload.
   }
 }
 
 /**
  * When enabled, starts background GPS for active trips.
- * Currently hard-disabled — always stops any leftover foreground-service notification.
+ * Currently hard-disabled — no TaskManager access until a native build with the module.
  */
 export function useRiderLocationTracking(enabled: boolean) {
   useEffect(() => {
@@ -33,9 +37,9 @@ export function useRiderLocationTracking(enabled: boolean) {
 
     (async () => {
       try {
-        // Always tear down leftover tracking (old builds left the orange notification).
+        if (!V1_LIVE_LOCATION_ENABLED) return;
         await safeStopBackgroundLocation();
-        if (!V1_LIVE_LOCATION_ENABLED || !enabled || !alive) return;
+        if (!enabled || !alive) return;
 
         ensureRiderLocationTaskRegistered();
 

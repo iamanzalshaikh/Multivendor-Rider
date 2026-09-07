@@ -244,8 +244,8 @@ export default function EditProfileScreen() {
       Alert.alert('Invalid mobile', 'Enter a 10-digit mobile number.');
       return;
     }
-    if (ifscCode && !/^[A-Z]{4}0[A-Z0-9]{6}$/i.test(ifscCode.trim())) {
-      Alert.alert('Invalid IFSC', 'Enter a valid IFSC code (e.g. SBIN0001234).');
+    if (ifscCode && ifscCode.trim().length < 3) {
+      Alert.alert('Invalid branch code', 'Enter a valid bank branch code.');
       return;
     }
     saveMut.mutate();
@@ -337,7 +337,7 @@ export default function EditProfileScreen() {
           <SectionTitle title="KYC documents" />
           <DocUpload label="Profile photo" value={profileImage} onChange={setProfileImage} />
           <DocUpload label="Driving license" value={drivingLicense} onChange={setDrivingLicense} />
-          <DocUpload label="Aadhaar card" value={aadhaarCard} onChange={setAadhaarCard} />
+          <DocUpload label="National ID" value={aadhaarCard} onChange={setAadhaarCard} />
 
           <SectionTitle title="Bank for payouts" />
           <View style={[styles.block, cardStyle, { backgroundColor: theme.backgroundElement }]}>
@@ -355,10 +355,10 @@ export default function EditProfileScreen() {
               keyboardType="number-pad"
             />
             <Field
-              label="IFSC code"
+              label="Bank branch code"
               value={ifscCode}
               onChangeText={setIfscCode}
-              placeholder="SBIN0001234"
+              placeholder="e.g. BNSJ"
               autoCapitalize="characters"
             />
           </View>
