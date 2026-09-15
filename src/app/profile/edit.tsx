@@ -24,6 +24,7 @@ import { hasLocalImage, hasUploadedImage, imageStatusLabel } from '@/lib/imageUt
 import { isLocalImageUri, uploadRiderDocument } from '@/lib/apiUpload';
 import { pickDocumentImage, takeDocumentPhoto } from '@/lib/pickDocumentImage';
 import { invalidateRiderProfile } from '@/lib/riderQueryInvalidation';
+import { extractApiErrorMessage } from '@/lib/apiErrors';
 import { toast } from '@/lib/toast';
 import { fetchRiderMe, updateRiderProfile } from '@/services/riders';
 import { useRiderStore } from '@/stores/riderStore';
@@ -241,7 +242,7 @@ export default function EditProfileScreen() {
       if (__DEV__) console.error('[edit-profile] save failed', e);
       setInfoModal({
         title: 'Save failed',
-        message: e instanceof Error ? e.message : 'Try again',
+        message: extractApiErrorMessage(e, 'Try again'),
         variant: 'error',
       });
     },
@@ -252,15 +253,6 @@ export default function EditProfileScreen() {
       setInfoModal({
         title: 'Invalid mobile',
         message: 'Enter a 10-digit mobile number.',
-        variant: 'warning',
-      });
-      return;
-    }
-    const branchCode = ifscCode.trim();
-    if (branchCode && !/^[A-Z0-9]{2,12}$/i.test(branchCode)) {
-      setInfoModal({
-        title: 'Invalid branch code',
-        message: 'Enter a valid bank branch code (2–12 letters or numbers, e.g. BNSJ).',
         variant: 'warning',
       });
       return;

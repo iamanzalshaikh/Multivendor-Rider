@@ -4,10 +4,20 @@ type ApiErrorPayload = {
 };
 
 function humanizeValidation(text: string): string {
+  if (/must match pattern|Invalid string/i.test(text)) {
+    // Old production IFSC regex — ignore until server is redeployed; keep message generic
+    if (/ifsc|A-Z\]\{4\}0/i.test(text)) {
+      return 'Could not save bank branch code. Please try again after the server update.';
+    }
+    if (/mobile|phone/i.test(text)) {
+      return 'Please enter a valid 10-digit mobile number.';
+    }
+    return 'One of the fields has an invalid format. Please check and try again.';
+  }
   if (/vehicleType/i.test(text) && /enum/i.test(text)) {
     return 'Invalid vehicle type. Choose Bike, Scooter, Bicycle, or Car.';
   }
-  if (/mobile/i.test(text)) {
+  if (/mobile/i.test(text) && /regex|pattern|10/i.test(text)) {
     return 'Please enter a valid 10-digit mobile number.';
   }
   if (/email/i.test(text)) {
@@ -29,10 +39,10 @@ export function messageFromApiPayload(
 
   for (const raw of candidates) {
     if (raw === 'Internal Server Error') continue;
-    if (/validation failed|enum value|ValidationError/i.test(raw)) {
+    if (/validation failed|enum value|ValidationError|must match pattern|Invalid string/i.test(raw)) {
       return humanizeValidation(raw);
     }
-    return raw;
+    return humanizeValidation(raw);
   }
 
   return fallback;
@@ -49,10 +59,7 @@ export function extractApiErrorMessage(error: unknown, fallback = 'Something wen
   }
 
   if (err.message && err.message !== 'Internal Server Error') {
-    if (/validation failed|enum value|ValidationError/i.test(err.message)) {
-      return humanizeValidation(err.message);
-    }
-    return err.message;
+    return humanizeValidation(err.message);
   }
 
   return fallback;
