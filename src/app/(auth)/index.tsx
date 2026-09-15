@@ -8,14 +8,12 @@ import {
   Platform,
   ScrollView,
   ActivityIndicator,
-  Linking,
 } from 'react-native';
 import { Link, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 
 import { ThemedText } from '@/components/themed-text';
 import { Layout, cardStyle } from '@/constants/layout';
-import { LegalUrls } from '@/constants/legal';
 import { Brand, Fonts, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { extractApiErrorMessage } from '@/lib/apiErrors';
@@ -125,7 +123,7 @@ export default function LoginScreen() {
                 By continuing, you agree to our
               </ThemedText>
               <View style={styles.legalRow}>
-                <Pressable onPress={() => void Linking.openURL(LegalUrls.terms)} hitSlop={8}>
+                <Pressable onPress={() => router.push('/terms')} hitSlop={8}>
                   <ThemedText type="small" style={[styles.legalLink, { color: theme.primary }]}>
                     Terms of Service
                   </ThemedText>
@@ -134,7 +132,7 @@ export default function LoginScreen() {
                   {' '}
                   and{' '}
                 </ThemedText>
-                <Pressable onPress={() => void Linking.openURL(LegalUrls.privacy)} hitSlop={8}>
+                <Pressable onPress={() => router.push('/privacy')} hitSlop={8}>
                   <ThemedText type="small" style={[styles.legalLink, { color: theme.primary }]}>
                     Privacy Policy
                   </ThemedText>

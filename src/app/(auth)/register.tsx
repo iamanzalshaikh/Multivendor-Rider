@@ -8,7 +8,6 @@ import {
   ActivityIndicator,
   Platform,
   Image,
-  Linking,
   type TextInput as TextInputType,
 } from 'react-native';
 import { useRouter } from 'expo-router';
@@ -18,7 +17,6 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 
 import { ThemedText } from '@/components/themed-text';
 import { cardStyle, Layout } from '@/constants/layout';
-import { LegalUrls } from '@/constants/legal';
 import { Brand, Fonts, Spacing } from '@/constants/theme';
 import { useKeyboardInset } from '@/hooks/use-keyboard-inset';
 import { useTheme } from '@/hooks/use-theme';
@@ -56,6 +54,7 @@ export default function RegisterScreen() {
   const [aadhaarCardUri, setAadhaarCardUri] = useState('');
   const [accountHolderName, setAccountHolderName] = useState('');
   const [accountNumber, setAccountNumber] = useState('');
+  const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -117,6 +116,10 @@ export default function RegisterScreen() {
   async function onSubmit() {
     setError(null);
     if (!validateStep(1) || !validateStep(2) || !validateStep(3)) return;
+    if (!acceptedTerms) {
+      setError('Please accept the Terms of Service and Privacy Policy to continue.');
+      return;
+    }
 
     setBusy(true);
     try {
@@ -390,27 +393,24 @@ export default function RegisterScreen() {
             </View>
           ) : null}
 
-          <View style={styles.legalBox}>
-            <ThemedText type="small" themeColor="textSecondary" style={{ textAlign: 'center' }}>
-              By continuing, you agree to our
-            </ThemedText>
-            <View style={styles.legalRow}>
-              <Pressable onPress={() => void Linking.openURL(LegalUrls.terms)} hitSlop={8}>
-                <ThemedText type="small" style={[styles.legalLink, { color: theme.primary }]}>
-                  Terms of Service
-                </ThemedText>
-              </Pressable>
-              <ThemedText type="small" themeColor="textSecondary">
-                {' '}
-                and{' '}
-              </ThemedText>
-              <Pressable onPress={() => void Linking.openURL(LegalUrls.privacy)} hitSlop={8}>
-                <ThemedText type="small" style={[styles.legalLink, { color: theme.primary }]}>
-                  Privacy Policy
-                </ThemedText>
-              </Pressable>
+          <Pressable
+            onPress={() => setAcceptedTerms((v) => !v)}
+            style={[styles.termsRow, { borderColor: theme.border, backgroundColor: theme.backgroundElement }]}
+          >
+            <View style={[styles.termsCheck, acceptedTerms && { backgroundColor: theme.primary, borderColor: theme.primary }]}>
+              {acceptedTerms ? <Ionicons name="checkmark" size={14} color="#fff" /> : null}
             </View>
-          </View>
+            <ThemedText type="small" themeColor="textSecondary" style={styles.termsText}>
+              I agree to the{' '}
+              <ThemedText type="small" style={{ color: theme.primary, fontFamily: Fonts.bold }} onPress={() => router.push('/terms')}>
+                Terms of Service
+              </ThemedText>
+              {' '}and{' '}
+              <ThemedText type="small" style={{ color: theme.primary, fontFamily: Fonts.bold }} onPress={() => router.push('/privacy')}>
+                Privacy Policy
+              </ThemedText>
+            </ThemedText>
+          </Pressable>
 
           <View style={styles.footerActions}>
             {step > 1 ? (
@@ -569,17 +569,29 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     marginTop: Spacing.two,
   },
-  legalBox: {
+  termsRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
     marginTop: Spacing.three,
     marginBottom: Spacing.two,
-    alignItems: 'center',
-    gap: 4,
+    borderWidth: 1,
+    borderRadius: 12,
+    padding: 12,
   },
-  legalRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'center',
+  termsCheck: {
+    width: 22,
+    height: 22,
+    borderRadius: 6,
+    borderWidth: 1.5,
+    borderColor: '#ccc',
     alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 1,
+  },
+  termsText: {
+    flex: 1,
+    lineHeight: 20,
   },
   legalLink: {
     fontFamily: Fonts.bold,

@@ -16,7 +16,7 @@
       }
     },
     "scheme": "riderapp",
-    "userInterfaceStyle": "automatic",
+    "userInterfaceStyle": "light",
     "notification": {
       "icon": "./assets/images/notification-icon.png",
       "color": "#FF5A00",

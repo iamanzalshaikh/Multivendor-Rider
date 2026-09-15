@@ -6,7 +6,6 @@ import {
   TextInput,
   Pressable,
   ActivityIndicator,
-  Alert,
   Image,
   KeyboardAvoidingView,
   Platform,
@@ -16,6 +15,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Ionicons } from '@expo/vector-icons';
 
+import { InfoModal } from '@/components/info-modal';
 import { ThemedText } from '@/components/themed-text';
 import { cardStyle, Layout } from '@/constants/layout';
 import { Fonts, Spacing } from '@/constants/theme';
@@ -24,6 +24,7 @@ import { hasLocalImage, hasUploadedImage, imageStatusLabel } from '@/lib/imageUt
 import { isLocalImageUri, uploadRiderDocument } from '@/lib/apiUpload';
 import { pickDocumentImage, takeDocumentPhoto } from '@/lib/pickDocumentImage';
 import { invalidateRiderProfile } from '@/lib/riderQueryInvalidation';
+import { toast } from '@/lib/toast';
 import { fetchRiderMe, updateRiderProfile } from '@/services/riders';
 import { useRiderStore } from '@/stores/riderStore';
 import type { VehicleType } from '@/types/rider';
@@ -170,6 +171,7 @@ export default function EditProfileScreen() {
   const [accountHolderName, setAccountHolderName] = useState('');
   const [accountNumber, setAccountNumber] = useState('');
   const [ifscCode, setIfscCode] = useState('');
+  const [infoModal, setInfoModal] = useState<{ title: string; message: string; variant?: 'info' | 'warning' | 'error' | 'success' } | null>(null);
 
   useEffect(() => {
     if (!meQ.data) return;
@@ -209,6 +211,8 @@ export default function EditProfileScreen() {
         resolveDoc(aadhaarCard, 'aadhaarCard'),
       ]);
 
+      const branchCode = ifscCode.trim().toUpperCase();
+
       return updateRiderProfile({
         fullName: fullName.trim() || undefined,
         mobile: mobile.trim() || undefined,
@@ -218,11 +222,11 @@ export default function EditProfileScreen() {
         drivingLicense: resolvedLicense,
         aadhaarCard: resolvedAadhaar,
         bankAccountDetails:
-          accountHolderName || accountNumber || ifscCode
+          accountHolderName || accountNumber || branchCode
             ? {
                 accountHolderName: accountHolderName.trim() || undefined,
                 accountNumber: accountNumber.trim() || undefined,
-                ifscCode: ifscCode.trim().toUpperCase() || undefined,
+                ifscCode: branchCode || undefined,
               }
             : undefined,
       });
@@ -230,22 +234,35 @@ export default function EditProfileScreen() {
     onSuccess: (data) => {
       setRider(data.rider);
       invalidateRiderProfile(qc);
-      Alert.alert('Saved', 'Profile updated successfully.');
+      toast.success('Profile updated successfully.', 'Saved');
       router.back();
     },
     onError: (e) => {
       if (__DEV__) console.error('[edit-profile] save failed', e);
-      Alert.alert('Save failed', e instanceof Error ? e.message : 'Try again');
+      setInfoModal({
+        title: 'Save failed',
+        message: e instanceof Error ? e.message : 'Try again',
+        variant: 'error',
+      });
     },
   });
 
   function onSave() {
     if (mobile && !/^[0-9]{10}$/.test(mobile)) {
-      Alert.alert('Invalid mobile', 'Enter a 10-digit mobile number.');
+      setInfoModal({
+        title: 'Invalid mobile',
+        message: 'Enter a 10-digit mobile number.',
+        variant: 'warning',
+      });
       return;
     }
-    if (ifscCode && ifscCode.trim().length < 3) {
-      Alert.alert('Invalid branch code', 'Enter a valid bank branch code.');
+    const branchCode = ifscCode.trim();
+    if (branchCode && !/^[A-Z0-9]{2,12}$/i.test(branchCode)) {
+      setInfoModal({
+        title: 'Invalid branch code',
+        message: 'Enter a valid bank branch code (2–12 letters or numbers, e.g. BNSJ).',
+        variant: 'warning',
+      });
       return;
     }
     saveMut.mutate();
@@ -377,6 +394,14 @@ export default function EditProfileScreen() {
           )}
         </Pressable>
       </View>
+
+      <InfoModal
+        visible={Boolean(infoModal)}
+        title={infoModal?.title ?? ''}
+        message={infoModal?.message ?? ''}
+        variant={infoModal?.variant ?? 'info'}
+        onClose={() => setInfoModal(null)}
+      />
     </SafeAreaView>
   );
 }
