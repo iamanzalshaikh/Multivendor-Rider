@@ -1,4 +1,4 @@
-import { View, StyleSheet, Pressable, Alert, Image, Linking } from 'react-native';
+import { View, StyleSheet, Pressable, Image, Linking } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -19,6 +19,7 @@ import { disconnectSocket } from '@/lib/socketClient';
 import { ENV_INFO } from '@/config/env';
 import { deleteAccount } from '@/services/account';
 import { extractApiErrorMessage } from '@/lib/apiErrors';
+import { dialog } from '@/lib/dialog';
 import type { VerificationStatus } from '@/types/rider';
 
 function InfoRow({
@@ -81,7 +82,7 @@ export default function ProfileScreen() {
   const verificationStatus = (data?.verificationStatus ?? 'pending') as VerificationStatus;
 
   async function onLogout() {
-    Alert.alert('Log out', 'End your session?', [
+    dialog.alert('Log out', 'End your session?', [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Log out',
@@ -96,7 +97,7 @@ export default function ProfileScreen() {
   }
 
   function onDeleteAccount() {
-    Alert.alert(
+    dialog.alert(
       'Delete Account',
       `This permanently deletes your rider account and personal data (KYC, bank details, sessions). Order/payment records may be retained for legal compliance.\n\nWeb: ${LegalUrls.accountDeletion}\nOr email ${LEGAL_SUPPORT_EMAIL}`,
       [
@@ -109,7 +110,7 @@ export default function ProfileScreen() {
           text: 'Delete now',
           style: 'destructive',
           onPress: () => {
-            Alert.alert('Confirm deletion', 'This cannot be undone. Delete your account?', [
+            dialog.alert('Confirm deletion', 'This cannot be undone. Delete your account?', [
               { text: 'Cancel', style: 'cancel' },
               {
                 text: 'Delete',
@@ -121,7 +122,7 @@ export default function ProfileScreen() {
                     await logout();
                     router.replace('/(auth)');
                   } catch (e) {
-                    Alert.alert('Could not delete', extractApiErrorMessage(e, 'Try again or use the web form.'));
+                    dialog.alert('Could not delete', extractApiErrorMessage(e, 'Try again or use the web form.'));
                   }
                 },
               },
@@ -194,7 +195,7 @@ export default function ProfileScreen() {
             )}
             <ThemedText style={styles.name}>{user?.fullName ?? data?.riderCode ?? 'Partner'}</ThemedText>
             <ThemedText type="small" themeColor="textSecondary">
-              {data?.riderCode} Â· {user?.email ?? ''}
+              {data?.riderCode} · {user?.email ?? ''}
             </ThemedText>
             <View style={styles.chipRow}>
               <StatusChip
@@ -213,10 +214,10 @@ export default function ProfileScreen() {
           </View>
 
           <View style={[styles.infoCard, cardStyle, { backgroundColor: theme.backgroundElement }]}>
-            <InfoRow label="Mobile" value={user?.mobile ?? 'â€”'} icon="call-outline" />
+            <InfoRow label="Mobile" value={user?.mobile ?? '—'} icon="call-outline" />
             <InfoRow
               label="Vehicle"
-              value={`${(data?.vehicleType ?? 'bike').toUpperCase()}${data?.vehicleNumber ? ` Â· ${data.vehicleNumber}` : ''}`}
+              value={`${(data?.vehicleType ?? 'bike').toUpperCase()}${data?.vehicleNumber ? ` · ${data.vehicleNumber}` : ''}`}
               icon="bicycle-outline"
             />
             <InfoRow
@@ -230,7 +231,7 @@ export default function ProfileScreen() {
               }
               icon="shield-checkmark-outline"
             />
-            <InfoRow label="Rating" value={`${data?.averageRating?.toFixed(1) ?? '0.0'} â˜…`} icon="star-outline" />
+            <InfoRow label="Rating" value={`${data?.averageRating?.toFixed(1) ?? '0.0'} ?`} icon="star-outline" />
             <InfoRow label="Deliveries" value={String(data?.totalDeliveries ?? 0)} icon="cube-outline" />
             <InfoRow
               label="Lifetime earnings"

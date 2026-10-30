@@ -6,8 +6,10 @@ import { updateRiderLocation } from '@/services/riders';
 
 const ACTIVE_STATUSES = new Set([
   'RIDER_ASSIGNED',
+  'PROCESSING',
   'PICKED_UP',
   'ON_THE_WAY',
+  'ARRIVED',
   'READY_FOR_PICKUP',
 ]);
 

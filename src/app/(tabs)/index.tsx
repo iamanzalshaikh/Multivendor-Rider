@@ -9,11 +9,11 @@ import {
   ActivityIndicator,
   RefreshControl,
   Image,
-  Alert,
   Modal,
   TextInput,
 } from 'react-native';
 import { useRouter } from 'expo-router';
+import { dialog } from '@/lib/dialog';
 import { Ionicons } from '@expo/vector-icons';
 
 import { EarningsHeroCard } from '@/components/EarningsHeroCard';
@@ -166,7 +166,7 @@ export default function HomeScreen() {
   if (homeLoading && !currentRider) {
     return (
       <View style={[styles.root, { backgroundColor: theme.background }]}>
-        <ScreenHeader title="Partner" subtitle="Loading your dashboardâ€¦" />
+        <ScreenHeader title="Partner" subtitle="Loading your dashboard…" />
         <RiderHomeSkeleton />
       </View>
     );
@@ -354,7 +354,7 @@ export default function HomeScreen() {
                 });
                 
                 if (allArrived) {
-                  Alert.alert(
+                  dialog.alert(
                     'Batch Update Complete',
                     'All active orders have already arrived. Please confirm delivery individually at each customer location.'
                   );
@@ -460,13 +460,13 @@ export default function HomeScreen() {
             </ThemedText>
 
             <View style={{ width: '100%', gap: Spacing.two, marginBottom: Spacing.four }}>
-              {['ON_THE_WAY', 'ARRIVED'].map((status) => (
+              {['PROCESSING', 'ON_THE_WAY', 'ARRIVED'].map((status) => (
                 <Pressable
                   key={status}
                   style={[styles.modalButton, styles.modalButtonCancel, { borderColor: theme.border, marginBottom: 8 }]}
                   onPress={() => batchUpdateMut.mutate(status)}>
                   <ThemedText style={{ fontFamily: Fonts.bold }}>
-                    {status.replace(/_/g, ' ')}
+                    {status === 'PROCESSING' ? 'Processing' : status.replace(/_/g, ' ')}
                   </ThemedText>
                 </Pressable>
               ))}

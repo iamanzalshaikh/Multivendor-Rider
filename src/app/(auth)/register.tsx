@@ -47,6 +47,7 @@ export default function RegisterScreen() {
   const [email, setEmail] = useState('');
   const [mobile, setMobile] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [vehicleNumber, setVehicleNumber] = useState('');
   const [vehicleType, setVehicleType] = useState<VehicleType>('bike');
   const [profileImageUri, setProfileImageUri] = useState('');
@@ -85,12 +86,32 @@ export default function RegisterScreen() {
 
   function validateStep(currentStep: 1 | 2 | 3): boolean {
     if (currentStep === 1) {
-      if (!fullName.trim() || !email.trim() || !mobile.trim() || password.length < 6) {
-        setError('Step 1: Name, email, mobile and password (6+ chars) are required');
+      if (!fullName.trim()) {
+        setError('Full name is required.');
+        return false;
+      }
+      if (!email.trim()) {
+        setError('Email is required.');
+        return false;
+      }
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+        setError('Please enter a valid email address.');
+        return false;
+      }
+      if (!mobile.trim()) {
+        setError('Mobile number is required.');
         return false;
       }
       if (!/^[0-9]{10}$/.test(mobile.trim())) {
-        setError('Step 1: Mobile number must be 10 digits');
+        setError('Mobile number must be 10 digits.');
+        return false;
+      }
+      if (!password) {
+        setError('Password is required.');
+        return false;
+      }
+      if (password.length < 6) {
+        setError('Password must be at least 6 characters.');
         return false;
       }
     }
@@ -98,8 +119,12 @@ export default function RegisterScreen() {
       // KYC is optional
     }
     if (currentStep === 3) {
-      if (!accountHolderName.trim() || !accountNumber.trim()) {
-        setError('Step 3: Bank holder name and account number are required');
+      if (!accountHolderName.trim()) {
+        setError('Account holder name is required.');
+        return false;
+      }
+      if (!accountNumber.trim()) {
+        setError('Account number is required.');
         return false;
       }
     }
@@ -228,30 +253,55 @@ export default function RegisterScreen() {
                   <ThemedText type="label" themeColor="textSecondary">
                     {label}
                   </ThemedText>
-                  <TextInput
-                    ref={(r) => {
-                      inputRefs.current[fieldKey] = r;
-                    }}
-                    value={value}
-                    onChangeText={setter}
-                    secureTextEntry={secure}
-                    autoCapitalize={label === 'Email' ? 'none' : 'words'}
-                    keyboardType={keyboard === 'phone-pad' ? 'phone-pad' : 'default'}
-                    placeholderTextColor={theme.textSecondary}
-                    returnKeyType={fieldKey === 'vehicleNumber' ? 'done' : 'next'}
-                    blurOnSubmit={fieldKey === 'vehicleNumber'}
-                    onFocus={() => scrollToField(fieldKey)}
-                    onSubmitEditing={() => {
-                      const order = ['fullName', 'email', 'mobile', 'password', 'vehicleNumber'];
-                      const idx = order.indexOf(fieldKey);
-                      const next = order[idx + 1];
-                      if (next) inputRefs.current[next]?.focus();
-                    }}
-                    style={[
-                      styles.input,
-                      { color: theme.text, borderColor: theme.border, fontFamily: Fonts.medium },
-                    ]}
-                  />
+                  {secure ? (
+                    <View style={[styles.inputRow, { borderColor: theme.border }]}>
+                      <TextInput
+                        ref={(r) => {
+                          inputRefs.current[fieldKey] = r;
+                        }}
+                        value={value}
+                        onChangeText={setter}
+                        secureTextEntry={!showPassword}
+                        autoCapitalize="none"
+                        placeholderTextColor={theme.textSecondary}
+                        returnKeyType="next"
+                        onFocus={() => scrollToField(fieldKey)}
+                        onSubmitEditing={() => inputRefs.current.vehicleNumber?.focus()}
+                        style={[styles.inputFlex, { color: theme.text, fontFamily: Fonts.medium }]}
+                      />
+                      <Pressable onPress={() => setShowPassword((v) => !v)} hitSlop={8}>
+                        <Ionicons
+                          name={showPassword ? 'eye-off-outline' : 'eye-outline'}
+                          size={20}
+                          color={theme.textSecondary}
+                        />
+                      </Pressable>
+                    </View>
+                  ) : (
+                    <TextInput
+                      ref={(r) => {
+                        inputRefs.current[fieldKey] = r;
+                      }}
+                      value={value}
+                      onChangeText={setter}
+                      autoCapitalize={label === 'Email' ? 'none' : 'words'}
+                      keyboardType={keyboard === 'phone-pad' ? 'phone-pad' : 'default'}
+                      placeholderTextColor={theme.textSecondary}
+                      returnKeyType={fieldKey === 'vehicleNumber' ? 'done' : 'next'}
+                      blurOnSubmit={fieldKey === 'vehicleNumber'}
+                      onFocus={() => scrollToField(fieldKey)}
+                      onSubmitEditing={() => {
+                        const order = ['fullName', 'email', 'mobile', 'password', 'vehicleNumber'];
+                        const idx = order.indexOf(fieldKey);
+                        const next = order[idx + 1];
+                        if (next) inputRefs.current[next]?.focus();
+                      }}
+                      style={[
+                        styles.input,
+                        { color: theme.text, borderColor: theme.border, fontFamily: Fonts.medium },
+                      ]}
+                    />
+                  )}
                 </View>
               ))}
               <ThemedText type="label" themeColor="textSecondary" style={styles.sectionLabel}>
@@ -395,7 +445,13 @@ export default function RegisterScreen() {
 
           <Pressable
             onPress={() => setAcceptedTerms((v) => !v)}
-            style={[styles.termsRow, { borderColor: theme.border, backgroundColor: theme.backgroundElement }]}
+            style={[
+              styles.termsRow,
+              {
+                borderColor: !acceptedTerms && step === 3 ? theme.danger : theme.border,
+                backgroundColor: theme.backgroundElement,
+              },
+            ]}
           >
             <View style={[styles.termsCheck, acceptedTerms && { backgroundColor: theme.primary, borderColor: theme.primary }]}>
               {acceptedTerms ? <Ionicons name="checkmark" size={14} color="#fff" /> : null}
@@ -409,6 +465,7 @@ export default function RegisterScreen() {
               <ThemedText type="small" style={{ color: theme.primary, fontFamily: Fonts.bold }} onPress={() => router.push('/privacy')}>
                 Privacy Policy
               </ThemedText>
+              <ThemedText type="small" style={{ color: theme.danger }}> *</ThemedText>
             </ThemedText>
           </Pressable>
 
@@ -441,11 +498,11 @@ export default function RegisterScreen() {
             ) : (
               <Pressable
                 onPress={onSubmit}
-                disabled={busy}
+                disabled={busy || !acceptedTerms}
                 style={[
                   styles.button,
                   styles.flexOne,
-                  { backgroundColor: theme.primary, opacity: busy ? 0.7 : 1 },
+                  { backgroundColor: theme.primary, opacity: busy || !acceptedTerms ? 0.55 : 1 },
                 ]}>
                 {busy ? (
                   <ActivityIndicator color="#fff" />
@@ -531,6 +588,21 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     fontSize: 14,
     marginTop: 4,
+  },
+  inputRow: {
+    borderWidth: 1,
+    borderRadius: Layout.inputRadius,
+    paddingHorizontal: 14,
+    minHeight: 48,
+    marginTop: 4,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  inputFlex: {
+    flex: 1,
+    paddingVertical: 12,
+    fontSize: 14,
   },
   vehicleRow: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.two, marginTop: Spacing.one },
   vehicleChip: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 12, paddingVertical: 8 },

@@ -60,7 +60,19 @@ export async function syncPendingCashSessions(): Promise<{ synced: number; faile
       });
       await removePendingCashSession(item.localId);
       synced += 1;
-    } catch {
+    } catch (err) {
+      const status = (err as { status?: number } | undefined)?.status;
+      const msg = String((err as Error)?.message ?? '').toLowerCase();
+      // Already pending/confirmed — drop from offline queue (backend resumes existing).
+      if (
+        status === 409 ||
+        msg.includes('already pending') ||
+        msg.includes('already confirmed')
+      ) {
+        await removePendingCashSession(item.localId);
+        synced += 1;
+        continue;
+      }
       failed += 1;
     }
   }

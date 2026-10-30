@@ -1,6 +1,7 @@
 import { memo, useCallback, useState } from 'react';
-import { View, StyleSheet, Pressable, Alert } from 'react-native';
+import { View, StyleSheet, Pressable } from 'react-native';
 import { useRouter } from 'expo-router';
+import { dialog } from '@/lib/dialog';
 import { useQueryClient } from '@tanstack/react-query';
 import { Ionicons } from '@expo/vector-icons';
 import Animated, { FadeInDown } from 'react-native-reanimated';
@@ -16,16 +17,29 @@ import {
 } from '@/constants/deliveryStatus';
 import { cardStyle, Layout } from '@/constants/layout';
 import { Fonts, Spacing } from '@/constants/theme';
+import { useEtaPicker } from '@/hooks/use-eta-picker';
 import { useTheme } from '@/hooks/use-theme';
 import { prefetchRiderOrder } from '@/hooks/queries/rider';
 import { formatJmd, formatUsd, riderEarningForOrder } from '@/lib/money';
 import { formatDeliveryAddress, formatRestaurantAddress, orderDisplayId } from '@/lib/orderDisplay';
 import type { RiderOrder } from '@/types/rider';
 
+type RiderCardAction =
+  | 'processing'
+  | 'on_the_way'
+  | 'arrived'
+  | 'complete'
+  | 'reject'
+  | 'pickup'
+  | 'start';
+
 type Props = {
   order: RiderOrder;
   busy: boolean;
-  onAction: (action: 'pickup' | 'start' | 'arrived' | 'complete' | 'reject') => boolean | void;
+  onAction: (
+    action: RiderCardAction,
+    opts?: { etaMinutes?: number },
+  ) => boolean | void | Promise<boolean | void>;
 };
 
 export const ActiveOrderCard = memo(function ActiveOrderCard({ order, busy, onAction }: Props) {
@@ -43,7 +57,12 @@ export const ActiveOrderCard = memo(function ActiveOrderCard({ order, busy, onAc
   const customerPhone =
     typeof order.customerId === 'object' ? order.customerId?.mobile : undefined;
   const next = nextRiderAction(order.orderStatus);
-  const canReject = order.orderStatus === 'RIDER_ASSIGNED';
+  const canReject =
+    order.orderStatus === 'RIDER_ASSIGNED' ||
+    order.orderStatus === 'PENDING' ||
+    order.orderStatus === 'CONFIRMED' ||
+    order.orderStatus === 'PREPARING' ||
+    order.orderStatus === 'READY_FOR_PICKUP';
   const isBank = String(order.paymentMethod ?? '').toUpperCase() === 'BANK_TRANSFER';
   const isCod = String(order.paymentMethod ?? '').toUpperCase() === 'COD';
   const pay = String(order.paymentStatus ?? '').toUpperCase();
@@ -59,25 +78,37 @@ export const ActiveOrderCard = memo(function ActiveOrderCard({ order, busy, onAc
   }, [qc, order._id]);
 
   const [swipeKey, setSwipeKey] = useState(0);
+  const { pickEta, etaPickerModal } = useEtaPicker();
 
-  const runPrimary = useCallback(() => {
+  const runPrimary = useCallback(async () => {
     if (!next) return;
-    // COD must record cash + wait for customer confirm â€” never skip to completeDelivery.
+    // COD must record cash + wait for customer confirm — never skip to completeDelivery.
     if (next === 'complete' && isCod) {
       router.push(`/order/payment/${order._id}` as never);
       setSwipeKey((k) => k + 1);
       return;
     }
-    const handled = onAction(next);
+    if (next === 'on_the_way') {
+      const eta = await pickEta();
+      if (eta == null) {
+        setSwipeKey((k) => k + 1);
+        return;
+      }
+      const handled = await onAction(next, { etaMinutes: eta });
+      if (handled === false) setSwipeKey((k) => k + 1);
+      return;
+    }
+    const handled = await onAction(next);
     if (handled === false) {
       setSwipeKey((k) => k + 1);
     }
-  }, [next, isCod, onAction, order._id, router]);
+  }, [next, isCod, onAction, order._id, router, pickEta]);
 
   return (
     <Animated.View
       entering={FadeInDown.duration(280)}
       style={[styles.card, cardStyle, { backgroundColor: theme.backgroundElement }]}>
+      {etaPickerModal}
       <View style={[styles.statusBar, { backgroundColor: theme.primarySoft }]}>
         <ThemedText style={[styles.statusText, { color: theme.primary }]}>
           {RIDER_STATUS_LABELS[order.orderStatus] ?? order.orderStatus}
@@ -156,15 +187,15 @@ export const ActiveOrderCard = memo(function ActiveOrderCard({ order, busy, onAc
         {isCod ? (
           <View style={[styles.codBadge, { backgroundColor: theme.primarySoft }]}>
             <ThemedText style={[styles.codText, { color: theme.primary }]}>
-              COD Â· Collect {payInUsd ? 'USD' : 'JMD'} cash
+              COD · Collect {payInUsd ? 'USD' : 'JMD'} cash
             </ThemedText>
           </View>
         ) : (
           <View style={[styles.codBadge, { backgroundColor: theme.partnerSoft }]}>
             <ThemedText style={[styles.codText, { color: theme.partner }]}>
               {pay === 'COLLECTED' || pay === 'APPROVED'
-                ? 'Bank Â· Settled'
-                : 'Bank Â· Verify after delivery'}
+                ? 'Bank · Settled'
+                : 'Bank · Verify after delivery'}
             </ThemedText>
           </View>
         )}
@@ -174,7 +205,7 @@ export const ActiveOrderCard = memo(function ActiveOrderCard({ order, busy, onAc
         {canReject ? (
           <Pressable
             onPress={() =>
-              Alert.alert('Release order?', 'This job goes back to the pool.', [
+              dialog.alert('Release order?', 'This job goes back to the pool.', [
                 { text: 'Cancel', style: 'cancel' },
                 { text: 'Release', style: 'destructive', onPress: () => onAction('reject') },
               ])

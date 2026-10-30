@@ -5,9 +5,9 @@ import {
   StyleSheet,
   Pressable,
   ActivityIndicator,
-  Alert,
 } from 'react-native';
 import { useRouter } from 'expo-router';
+import { dialog } from '@/lib/dialog';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 
 import { ThemedText } from '@/components/themed-text';
@@ -40,9 +40,9 @@ export function DeliveryOfferModal() {
       const msg = e instanceof Error ? e.message : 'Could not accept';
       if (msg.toLowerCase().includes('assigned') || msg.toLowerCase().includes('available')) {
         clearOffer(orderId);
-        Alert.alert('Too late', 'Another rider accepted this delivery.');
+        dialog.alert('Too late', 'Another rider accepted this delivery.');
       } else {
-        Alert.alert('Accept failed', msg);
+        dialog.alert('Accept failed', msg);
       }
     },
   });
@@ -76,7 +76,7 @@ export function DeliveryOfferModal() {
           <ThemedText style={styles.orderId}>#{offer.orderNumber}</ThemedText>
           <ThemedText style={styles.restaurant}>{offer.restaurantName}</ThemedText>
           <ThemedText type="small" themeColor="textSecondary" style={styles.meta}>
-            Order value {formatJmd(offer.grandTotal)} Â· Delivery fee {formatJmd(offer.riderEarning)}
+            Order value {formatJmd(offer.grandTotal)} · Delivery fee {formatJmd(offer.riderEarning)}
           </ThemedText>
 
           <View style={[styles.timerRow, { backgroundColor: theme.primarySoft }]}>

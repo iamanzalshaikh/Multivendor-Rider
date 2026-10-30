@@ -18,9 +18,20 @@ const PRODUCTION_API_URL = BACKEND_URLS.production.api;
 const PRODUCTION_SOCKET_URL = BACKEND_URLS.production.socket;
 
 const DEFAULT_BACKEND_PORT = BACKEND_URLS.localPort;
-const FALLBACK_LAN_HOST = '192.168.1.103';
+const FALLBACK_LAN_HOST = '192.168.100.67';
 const ANDROID_EMULATOR_HOST =
   process.env.EXPO_PUBLIC_ANDROID_API_HOST?.trim() || FALLBACK_LAN_HOST;
+
+/** Rewrite stale EXPO_PUBLIC LAN IPs after .env IP changes (Metro often caches old values). */
+function withCurrentLanHost(url: string): string {
+  if (__DEV__ && /192\.168\.\d+\.\d+/.test(url)) {
+    const currentHost = resolveDevHostFromExpo() || FALLBACK_LAN_HOST;
+    if (!url.includes(currentHost)) {
+      return url.replace(/192\.168\.\d+\.\d+/g, currentHost);
+    }
+  }
+  return url;
+}
 
 function isAndroidEmulator(): boolean {
   if (Platform.OS !== 'android') return false;
@@ -94,14 +105,14 @@ function getDevSocketUrl(): string {
 }
 
 export const getApiUrl = (): string => {
-  const envUrl = process.env.EXPO_PUBLIC_API_URL;
-  if (envUrl) return envUrl;
+  const envUrl = process.env.EXPO_PUBLIC_API_URL?.trim();
+  if (envUrl) return withCurrentLanHost(envUrl);
   return isProduction ? PRODUCTION_API_URL : getDevApiUrl();
 };
 
 export const getSocketUrl = (): string => {
-  const envUrl = process.env.EXPO_PUBLIC_SOCKET_URL;
-  if (envUrl) return envUrl;
+  const envUrl = process.env.EXPO_PUBLIC_SOCKET_URL?.trim();
+  if (envUrl) return withCurrentLanHost(envUrl);
   return isProduction ? PRODUCTION_SOCKET_URL : getDevSocketUrl();
 };
 

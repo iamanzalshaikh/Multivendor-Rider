@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { Link, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
+import { Ionicons } from '@expo/vector-icons';
 
 import { ThemedText } from '@/components/themed-text';
 import { Layout, cardStyle } from '@/constants/layout';
@@ -25,13 +26,18 @@ export default function LoginScreen() {
   const router = useRouter();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   async function onLogin() {
     setError(null);
-    if (!email.trim() || !password) {
-      setError('Enter email and password');
+    if (!email.trim()) {
+      setError('Email is required.');
+      return;
+    }
+    if (!password) {
+      setError('Password is required.');
       return;
     }
     setBusy(true);
@@ -85,14 +91,32 @@ export default function LoginScreen() {
             <ThemedText type="label" themeColor="textSecondary" style={{ marginTop: Spacing.two }}>
               Password
             </ThemedText>
-            <TextInput
-              value={password}
-              onChangeText={setPassword}
-              secureTextEntry
-              placeholder="••••••••"
-              placeholderTextColor={theme.textSecondary}
-              style={[styles.input, { color: theme.text, borderColor: theme.border, fontFamily: Fonts.medium }]}
-            />
+            <View style={[styles.inputRow, { borderColor: theme.border }]}>
+              <TextInput
+                value={password}
+                onChangeText={setPassword}
+                secureTextEntry={!showPassword}
+                placeholder="••••••••"
+                placeholderTextColor={theme.textSecondary}
+                style={[styles.inputFlex, { color: theme.text, fontFamily: Fonts.medium }]}
+              />
+              <Pressable onPress={() => setShowPassword((v) => !v)} hitSlop={8}>
+                <Ionicons
+                  name={showPassword ? 'eye-off-outline' : 'eye-outline'}
+                  size={20}
+                  color={theme.textSecondary}
+                />
+              </Pressable>
+            </View>
+
+            <Pressable
+              onPress={() => router.push('/(auth)/forgot-password')}
+              style={styles.forgotWrap}
+              hitSlop={8}>
+              <ThemedText type="small" style={{ color: theme.primary, fontFamily: Fonts.bold }}>
+                Forgot password?
+              </ThemedText>
+            </Pressable>
 
             {error ? (
               <ThemedText type="small" style={{ color: theme.danger, marginTop: Spacing.one }}>
@@ -191,6 +215,22 @@ const styles = StyleSheet.create({
     fontSize: 14,
     marginTop: 4,
   },
+  inputRow: {
+    borderWidth: 1,
+    borderRadius: Layout.inputRadius,
+    paddingHorizontal: 14,
+    minHeight: 48,
+    marginTop: 4,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  inputFlex: {
+    flex: 1,
+    paddingVertical: 12,
+    fontSize: 14,
+  },
+  forgotWrap: { alignSelf: 'flex-end', marginTop: Spacing.one },
   button: {
     marginTop: Spacing.three,
     borderRadius: Layout.buttonRadius,
