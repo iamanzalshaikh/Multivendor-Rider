@@ -19,6 +19,7 @@ import {
 import { Brand } from '@/constants/theme';
 import { queryClient } from '@/lib/queryClient';
 import { ToastHost } from '@/components/toast-host';
+import { DialogHost } from '@/components/dialog-host';
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
@@ -63,6 +64,7 @@ export default function RootLayout() {
               }}
             />
             <ToastHost />
+            <DialogHost />
           </ThemeProvider>
         </QueryClientProvider>
       </SafeAreaProvider>

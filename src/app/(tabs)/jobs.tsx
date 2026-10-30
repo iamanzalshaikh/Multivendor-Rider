@@ -3,11 +3,11 @@ import {
   View,
   StyleSheet,
   RefreshControl,
-  Alert,
   FlatList,
   Platform,
 } from 'react-native';
 import { useRouter } from 'expo-router';
+import { dialog } from '@/lib/dialog';
 import { Ionicons } from '@expo/vector-icons';
 import { useCallback } from 'react';
 
@@ -39,7 +39,7 @@ export default function JobsScreen() {
       invalidateAfterOrderAction(qc, orderId);
       router.push('/(tabs)/orders');
     },
-    onError: (e) => Alert.alert('Could not accept', e instanceof Error ? e.message : 'Try again'),
+    onError: (e) => dialog.alert('Could not accept', e instanceof Error ? e.message : 'Try again'),
   });
 
   const handleAccept = useCallback(
@@ -65,7 +65,7 @@ export default function JobsScreen() {
   if (profileLoading && !rider) {
     return (
       <View style={[styles.root, { backgroundColor: theme.background }]}>
-        <ScreenHeader title="Delivery jobs" subtitle="Loadingâ€¦" />
+        <ScreenHeader title="Delivery jobs" subtitle="Loading…" />
         <RiderJobsSkeleton />
       </View>
     );
@@ -79,7 +79,7 @@ export default function JobsScreen() {
         </View>
         <ThemedText style={styles.centerTitle}>Go online first</ThemedText>
         <ThemedText type="small" themeColor="textSecondary" style={styles.centerSub}>
-          Turn on online mode from Home â€” use the toggle at the top of your dashboard.
+          Turn on online mode from Home — use the toggle at the top of your dashboard.
         </ThemedText>
       </View>
     );
@@ -91,7 +91,7 @@ export default function JobsScreen() {
         title="Delivery jobs"
         subtitle={
           availableQ.isLoading
-            ? 'Loadingâ€¦'
+            ? 'Loading…'
             : `${available.length} job${available.length === 1 ? '' : 's'} ready to accept`
         }
       />

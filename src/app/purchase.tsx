@@ -4,7 +4,6 @@ import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -175,7 +174,7 @@ export default function LogPurchaseScreen() {
                 label="Note (optional)"
                 value={note}
                 onChangeText={setNote}
-                placeholder="Shell petrol â€” bike"
+                placeholder="Shell petrol — bike"
               />
 
               <Pressable

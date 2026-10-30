@@ -63,7 +63,7 @@ export async function apiFetch<T = unknown>(
   }
 
   if (init?._retry || isAuthPath(path)) {
-    const err = new Error('Unauthorized') as ApiError;
+    const err = new Error('Email or password is incorrect. Please try again.') as ApiError;
     err.status = 401;
     throw err;
   }

@@ -54,7 +54,7 @@ export default function RiderTripMapScreen() {
     () =>
       Boolean(
         order?.orderStatus &&
-          ['RIDER_ASSIGNED', 'PICKED_UP', 'ON_THE_WAY', 'READY_FOR_PICKUP'].includes(order.orderStatus),
+          ['RIDER_ASSIGNED', 'PROCESSING', 'PICKED_UP', 'ON_THE_WAY', 'READY_FOR_PICKUP'].includes(order.orderStatus),
       ),
     [order?.orderStatus],
   );

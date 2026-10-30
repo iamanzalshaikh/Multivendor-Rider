@@ -6,8 +6,9 @@ import type { RiderOrder } from '@/types/rider';
 /** Map rider UI actions → orderStatus for optimistic cache updates. */
 export function optimisticStatusForAction(action: string): string | null {
   if (action === 'accept') return 'RIDER_ASSIGNED';
-  if (action === 'pickup') return 'PICKED_UP';
-  if (action === 'start' || action === 'arrived') return 'ARRIVED';
+  if (action === 'processing' || action === 'pickup') return 'PROCESSING';
+  if (action === 'on_the_way' || action === 'start') return 'ON_THE_WAY';
+  if (action === 'arrived') return 'ARRIVED';
   if (action === 'complete') return 'COMPLETED';
   return null;
 }

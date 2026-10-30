@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -9,8 +8,9 @@ import {
   View,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import { dialog } from '@/lib/dialog';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Ionicons } from '@expo/vector-icons';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 
@@ -21,7 +21,11 @@ import { useTheme } from '@/hooks/use-theme';
 import { useRiderOrderQuery } from '@/hooks/queries/rider';
 import { formatCashDue, formatJmd, formatUsd } from '@/lib/money';
 import { enqueueOfflineCashSession } from '@/lib/offlineCashQueue';
-import { completeDelivery, createCashPaymentSession } from '@/services/riders';
+import {
+  completeDelivery,
+  createCashPaymentSession,
+  fetchCashSessionByOrder,
+} from '@/services/riders';
 import { invalidateAfterDeliveryComplete } from '@/lib/riderQueryInvalidation';
 import { connectSocket, getSocketInstance } from '@/lib/socketClient';
 import { ServerSocketEvents } from '@/lib/socketEvents';
@@ -61,6 +65,41 @@ export default function RiderPaymentCaptureScreen() {
   const [sessionId, setSessionId] = useState<string | null>(null);
   const seededRef = useRef(false);
 
+  // Resume pending confirmation if rider backed out and reopened this screen.
+  const existingSessionQ = useQuery({
+    queryKey: ['cash-session-by-order', orderId],
+    queryFn: () => fetchCashSessionByOrder(orderId!),
+    enabled: Boolean(orderId),
+    staleTime: 15_000,
+    retry: 1,
+  });
+
+  useEffect(() => {
+    const s = existingSessionQ.data as
+      | { id?: string; status?: string; amountReceived?: number }
+      | null
+      | undefined;
+    if (!s?.id) return;
+    if (s.status === 'CONFIRMED') {
+      dialog.alert('Already confirmed', 'Customer already confirmed this cash payment.', [
+        { text: 'Complete delivery', onPress: () => completeMut.mutate() },
+        { text: 'OK' },
+      ]);
+      return;
+    }
+    if (s.status === 'PENDING_CUSTOMER') {
+      setSessionId(String(s.id));
+      setWaitingConfirm(true);
+      if (s.amountReceived != null && Number.isFinite(Number(s.amountReceived))) {
+        setAmountReceived(
+          payInUsd ? Number(s.amountReceived).toFixed(2) : String(Math.round(Number(s.amountReceived))),
+        );
+        seededRef.current = true;
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [existingSessionQ.data, payInUsd]);
+
   useEffect(() => {
     if (cashDue > 0 && !seededRef.current) {
       seededRef.current = true;
@@ -74,7 +113,7 @@ export default function RiderPaymentCaptureScreen() {
       if (orderId) invalidateAfterDeliveryComplete(qc, orderId);
       router.replace('/(tabs)/orders');
     },
-    onError: (e: Error) => Alert.alert('Could not complete', e.message),
+    onError: (e: Error) => dialog.alert('Could not complete', e.message),
   });
 
   useEffect(() => {
@@ -96,7 +135,7 @@ export default function RiderPaymentCaptureScreen() {
         if (!alive) return;
         sock.on(ServerSocketEvents.CASH_SESSION_CONFIRMED, handler);
       } catch {
-        /* offline â€” rider can tap Check if confirmed */
+        /* offline — rider can tap Check if confirmed */
       }
     })();
 
@@ -124,15 +163,42 @@ export default function RiderPaymentCaptureScreen() {
         const session = (await createCashPaymentSession(payload)) as {
           id?: string;
           _id?: string;
+          status?: string;
         };
         const id = session?.id ?? session?._id ?? null;
         if (!id) throw new Error('Payment session created but no id returned');
-        return id;
+        return { id, status: session.status };
       } catch (err) {
-        const msg = err instanceof Error ? err.message.toLowerCase() : '';
-        if (msg.includes('network') || msg.includes('fetch') || msg.includes('failed')) {
+        const status = (err as { status?: number } | undefined)?.status;
+        const msg = err instanceof Error ? err.message : '';
+        const lower = msg.toLowerCase();
+
+        // Already pending ? resume instead of failing / false offline queue.
+        if (
+          status === 409 ||
+          lower.includes('already pending') ||
+          lower.includes('already confirmed')
+        ) {
+          const existing = (await fetchCashSessionByOrder(orderId)) as {
+            id?: string;
+            status?: string;
+          } | null;
+          if (existing?.id) {
+            return { id: String(existing.id), status: existing.status };
+          }
+        }
+
+        // Only true network failures go offline — not "Request failed (500)".
+        const isNetwork =
+          status == null &&
+          (lower.includes('network') ||
+            lower.includes('fetch failed') ||
+            lower.includes('failed to fetch') ||
+            lower.includes('aborted') ||
+            lower.includes('timeout'));
+        if (isNetwork) {
           await enqueueOfflineCashSession(payload);
-          Alert.alert(
+          dialog.alert(
             'Saved offline',
             'Payment recorded locally. It will sync when you are back online. Ask the customer to open their app once you are online.',
           );
@@ -141,22 +207,28 @@ export default function RiderPaymentCaptureScreen() {
         throw err;
       }
     },
-    onSuccess: (id) => {
-      if (!id) return;
-      setSessionId(id);
+    onSuccess: (result) => {
+      if (!result?.id) return;
+      setSessionId(result.id);
       setWaitingConfirm(true);
-      Alert.alert(
+      void qc.invalidateQueries({ queryKey: ['cash-session-by-order', orderId] });
+      if (result.status === 'CONFIRMED') {
+        dialog.alert('Already confirmed', 'Customer already confirmed — completing delivery.');
+        completeMut.mutate();
+        return;
+      }
+      dialog.alert(
         'Sent to customer',
-        'Ask the customer to open the CASE app and confirm the cash amount (including any change / wallet credit).',
+        'Ask the customer to open the CASE app and confirm the cash amount (Home / Wallet banner or push).',
       );
     },
-    onError: (e: Error) => Alert.alert('Failed to record payment', e.message),
+    onError: (e: Error) => dialog.alert('Failed to record payment', e.message),
   });
 
   function sendForConfirm() {
     const received = Number(amountReceived);
     if (!Number.isFinite(received) || received < 0) {
-      Alert.alert('Invalid amount', 'Enter the cash the customer gave you.');
+      dialog.alert('Invalid amount', 'Enter the cash the customer gave you.');
       return;
     }
     const delta = Math.round((received - cashDue) * 100) / 100;
@@ -168,7 +240,7 @@ export default function RiderPaymentCaptureScreen() {
         delta > 0
           ? `Customer paid ${fmt(received)} but due is ${fmt(cashDue)}. Extra ${fmt(delta)} will be credited to their wallet after they confirm.`
           : `Customer paid ${fmt(received)} but due is ${fmt(cashDue)}. Shortfall ${fmt(Math.abs(delta))} will debit their wallet after they confirm.`;
-      Alert.alert(title, body, [
+      dialog.alert(title, body, [
         { text: 'Edit amount', style: 'cancel' },
         { text: 'Send for confirmation', onPress: () => submitMut.mutate() },
       ]);
@@ -177,7 +249,7 @@ export default function RiderPaymentCaptureScreen() {
     submitMut.mutate();
   }
 
-  if (!orderId || orderQ.isLoading) {
+  if (!orderId || orderQ.isLoading || existingSessionQ.isLoading) {
     return (
       <View style={[styles.center, { backgroundColor: theme.background }]}>
         <ActivityIndicator color={theme.primary} />
@@ -259,14 +331,14 @@ export default function RiderPaymentCaptureScreen() {
           <View style={[styles.hint, { backgroundColor: theme.partnerSoft }]}>
             <Ionicons name="add-circle-outline" size={18} color={theme.partner} />
             <ThemedText style={[styles.hintText, { color: theme.partner }]}>
-              Overpay {fmt(walletDeltaDisplay)} â†’ customer wallet credit (after they confirm)
+              Overpay {fmt(walletDeltaDisplay)} ? customer wallet credit (after they confirm)
             </ThemedText>
           </View>
         ) : walletDeltaDisplay < 0 ? (
           <View style={[styles.hint, { backgroundColor: dangerSoft }]}>
             <Ionicons name="remove-circle-outline" size={18} color={theme.danger} />
             <ThemedText style={[styles.hintText, { color: theme.danger }]}>
-              Short {fmt(Math.abs(walletDeltaDisplay))} â†’ customer wallet debit (after they confirm)
+              Short {fmt(Math.abs(walletDeltaDisplay))} ? customer wallet debit (after they confirm)
             </ThemedText>
           </View>
         ) : null}
@@ -278,14 +350,35 @@ export default function RiderPaymentCaptureScreen() {
             </View>
             <ThemedText style={styles.waitTitle}>Waiting for customer</ThemedText>
             <ThemedText type="small" themeColor="textSecondary" style={styles.waitBody}>
-              Ask them to confirm {fmt(received)} on their CASE app (Home / Wallet banner or push notification).
+              Confirmation already sent. Ask them to confirm {fmt(received)} on their CASE app (Home / Wallet banner or push).
             </ThemedText>
             <Pressable
               style={[styles.secondaryBtn, { borderColor: theme.border }]}
-              onPress={() => completeMut.mutate()}
+              onPress={() => {
+                void existingSessionQ.refetch();
+                completeMut.mutate();
+              }}
               disabled={completeMut.isPending}
             >
               <ThemedText style={{ fontFamily: Fonts.semiBold }}>Check if confirmed</ThemedText>
+            </Pressable>
+            <Pressable
+              style={[styles.secondaryBtn, { borderColor: theme.primary }]}
+              onPress={() => {
+                void createCashPaymentSession({
+                  orderId: orderId!,
+                  amountReceived: received,
+                  changeReturned: Math.max(0, Math.round((received - cashDue) * 100) / 100),
+                })
+                  .then(() =>
+                    dialog.alert('Reminder sent', 'Customer was notified again to confirm payment.'),
+                  )
+                  .catch((e: Error) => dialog.alert('Could not remind', e.message));
+              }}
+            >
+              <ThemedText style={{ fontFamily: Fonts.semiBold, color: theme.primary }}>
+                Resend confirmation to customer
+              </ThemedText>
             </Pressable>
           </View>
         ) : null}

@@ -200,7 +200,9 @@ const styles = StyleSheet.create({
   },
   button: {
     width: '100%',
-    height: 48,
+    minHeight: 48,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
     borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
@@ -209,5 +211,6 @@ const styles = StyleSheet.create({
     color: '#FFF',
     fontFamily: Fonts.bold,
     fontSize: 14,
+    textAlign: 'center',
   },
 });

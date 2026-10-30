@@ -194,7 +194,7 @@ export function resolveRouteEndpoints(input: {
   const c = isValidRoutePoint(customer) ? customer : null;
   const u = isValidRoutePoint(rider) ? rider : null;
 
-  if (['PICKED_UP', 'ON_THE_WAY'].includes(orderStatus ?? '') && u && c) {
+  if (['PROCESSING', 'PICKED_UP', 'ON_THE_WAY'].includes(orderStatus ?? '') && u && c) {
     return { origin: u, destination: c };
   }
   if (['RIDER_ASSIGNED', 'READY_FOR_PICKUP'].includes(orderStatus ?? '') && u && r) {

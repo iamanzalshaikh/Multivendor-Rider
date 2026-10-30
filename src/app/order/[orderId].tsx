@@ -1,13 +1,14 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useState } from 'react';
 import {
   View,
   StyleSheet,
   Pressable,
   ActivityIndicator,
-  Alert,
   ScrollView,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import { dialog } from '@/lib/dialog';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -49,12 +50,15 @@ import {
 import {
   acceptOrder,
   completeDelivery,
-  pickupOrder,
+  markArrived,
+  markItemsPurchased,
   rejectOrder,
-  startDelivery,
+  startOnTheWay,
 } from '@/services/riders';
 import { formatCashDue, formatJmd, formatOrderTotal, riderEarningForOrder } from '@/lib/money';
 import { riderKeys } from '@/hooks/queries/keys';
+import { DEFAULT_ETA_MINUTES } from '@/constants/deliveryStatus';
+import { useEtaPicker } from '@/hooks/use-eta-picker';
 
 function resolveOrderId(raw: string | string[] | undefined): string | undefined {
   if (!raw) return undefined;
@@ -67,6 +71,8 @@ export default function OrderDetailScreen() {
   const theme = useTheme();
   const router = useRouter();
   const qc = useQueryClient();
+  const [swipeKey, setSwipeKey] = useState(0);
+  const { pickEta, etaPickerModal } = useEtaPicker();
 
   const orderQ = useRiderOrderQuery(orderId);
 
@@ -74,7 +80,7 @@ export default function OrderDetailScreen() {
 
   const isActiveTrip = Boolean(
     orderQ.data?.orderStatus &&
-      ['RIDER_ASSIGNED', 'PICKED_UP', 'ON_THE_WAY', 'ARRIVED', 'READY_FOR_PICKUP'].includes(orderQ.data.orderStatus),
+      ['RIDER_ASSIGNED', 'PROCESSING', 'PICKED_UP', 'ON_THE_WAY', 'ARRIVED', 'READY_FOR_PICKUP'].includes(orderQ.data.orderStatus),
   );
   const riderGps = useRiderGps(isActiveTrip);
   const orderDetail = orderQ.data;
@@ -95,15 +101,30 @@ export default function OrderDetailScreen() {
   });
 
   const actionMut = useMutation({
-    mutationFn: async (action: 'accept' | 'pickup' | 'start' | 'arrived' | 'complete' | 'reject') => {
+    mutationFn: async (payload: {
+      action:
+        | 'accept'
+        | 'processing'
+        | 'on_the_way'
+        | 'arrived'
+        | 'complete'
+        | 'reject'
+        | 'pickup'
+        | 'start';
+      etaMinutes?: number;
+    }) => {
       if (!orderId) throw new Error('Missing order');
+      const { action, etaMinutes } = payload;
       if (action === 'accept') return acceptOrder(orderId);
-      if (action === 'pickup') return pickupOrder(orderId);
-      if (action === 'start' || action === 'arrived') return startDelivery(orderId);
+      if (action === 'processing' || action === 'pickup') return markItemsPurchased(orderId);
+      if (action === 'on_the_way' || action === 'start') {
+        return startOnTheWay(orderId, etaMinutes ?? DEFAULT_ETA_MINUTES);
+      }
+      if (action === 'arrived') return markArrived(orderId);
       if (action === 'complete') return completeDelivery(orderId);
       return rejectOrder(orderId);
     },
-    onMutate: async (action) => {
+    onMutate: async ({ action }) => {
       if (!orderId) return;
       const nextStatus = optimisticStatusForAction(action);
       if (!nextStatus) return;
@@ -111,13 +132,13 @@ export default function OrderDetailScreen() {
       const prev = patchOrderStatusOptimistic(qc, orderId, nextStatus);
       return { prev };
     },
-    onError: (e, _action, ctx) => {
+    onError: (e, _vars, ctx) => {
       if (orderId && ctx?.prev) {
         qc.setQueryData(riderKeys.order(orderId), ctx.prev);
       }
-      Alert.alert('Failed', e instanceof Error ? e.message : 'Try again');
+      dialog.alert('Failed', e instanceof Error ? e.message : 'Try again');
     },
-    onSuccess: (_, action) => {
+    onSuccess: (_, { action }) => {
       if (!orderId) return;
       if (action === 'complete') {
         invalidateAfterDeliveryComplete(qc, orderId);
@@ -129,6 +150,29 @@ export default function OrderDetailScreen() {
       }
     },
   });
+
+  async function runRiderAction(
+    action:
+      | 'accept'
+      | 'processing'
+      | 'on_the_way'
+      | 'arrived'
+      | 'complete'
+      | 'reject'
+      | 'pickup'
+      | 'start',
+  ) {
+    if (action === 'on_the_way' || action === 'start') {
+      const eta = await pickEta();
+      if (eta == null) {
+        setSwipeKey((k) => k + 1);
+        return;
+      }
+      actionMut.mutate({ action: 'on_the_way', etaMinutes: eta });
+      return;
+    }
+    actionMut.mutate({ action });
+  }
 
   if (!orderId) {
     return (
@@ -182,6 +226,7 @@ export default function OrderDetailScreen() {
 
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: theme.background }]} edges={['top', 'bottom']}>
+      {etaPickerModal}
       <View style={[styles.nav, { borderBottomColor: theme.border }]}>
         <Pressable onPress={() => router.back()} style={styles.navBack} hitSlop={12}>
           <Ionicons name="arrow-back" size={22} color={theme.text} />
@@ -285,8 +330,8 @@ export default function OrderDetailScreen() {
               <Ionicons name="card-outline" size={16} color={theme.partner} />
               <ThemedText style={[styles.codText, { color: theme.partner }]}>
                 {pay === 'COLLECTED' || pay === 'APPROVED'
-                  ? 'Bank Â· Settled â€” collect no cash'
-                  : 'Bank Â· Deliver now â€” payment verifies after delivery'}
+                  ? 'Bank · Settled — collect no cash'
+                  : 'Bank · Deliver now — payment verifies after delivery'}
               </ThemedText>
             </View>
           )}
@@ -297,7 +342,7 @@ export default function OrderDetailScreen() {
         <View style={[styles.footer, { backgroundColor: theme.backgroundElement, borderTopColor: theme.border }]}>
           {isAvailable ? (
             <Pressable
-              onPress={() => actionMut.mutate('accept')}
+              onPress={() => runRiderAction('accept')}
               disabled={actionMut.isPending}
               style={[
                 styles.cta,
@@ -314,15 +359,17 @@ export default function OrderDetailScreen() {
             </Pressable>
           ) : next ? (
             <SwipeToConfirm
+              key={`swipe-${swipeKey}`}
               label={actionButtonLabel(next, order)}
               busy={actionMut.isPending}
               disabled={actionMut.isPending}
               onConfirm={() => {
                 if (next === 'complete' && order.paymentMethod === 'COD') {
                   router.push(`/order/payment/${orderId}` as never);
+                  setSwipeKey((k) => k + 1);
                   return;
                 }
-                actionMut.mutate(next);
+                void runRiderAction(next);
               }}
             />
           ) : null}

@@ -166,10 +166,29 @@ export async function rejectOrder(orderId: string, reason?: string) {
   return asRiderOrder(body.data, orderId);
 }
 
-export async function pickupOrder(orderId: string) {
+/**
+ * Confirm items bought/collected at the store.
+ * Sends PICKED_UP for API compatibility; newer backends normalize it to PROCESSING
+ * (cancel lock). UI still labels this step "Items purchased".
+ */
+export async function markItemsPurchased(orderId: string) {
   const body = await apiFetch<ApiEnvelope<RiderOrder>>(`/riders/case/orders/${orderId}/status`, {
     method: 'PATCH',
     body: JSON.stringify({ status: 'PICKED_UP' }),
+  });
+  return asRiderOrder(body.data, orderId);
+}
+
+/** @deprecated use markItemsPurchased */
+export async function pickupOrder(orderId: string) {
+  return markItemsPurchased(orderId);
+}
+
+/** Rider departs store → ON_THE_WAY with arrival ETA (default 15 mins). */
+export async function startOnTheWay(orderId: string, etaMinutes = 15) {
+  const body = await apiFetch<ApiEnvelope<RiderOrder>>(`/riders/case/orders/${orderId}/status`, {
+    method: 'PATCH',
+    body: JSON.stringify({ status: 'ON_THE_WAY', etaMinutes }),
   });
   return asRiderOrder(body.data, orderId);
 }
@@ -182,15 +201,33 @@ export async function markArrived(orderId: string) {
   return asRiderOrder(body.data, orderId);
 }
 
-export async function batchUpdateCaseOrderStatuses(status: string) {
-  const body = await apiFetch<ApiEnvelope<RiderOrder[]>>(`/riders/case/orders/batch-status`, {
-    method: 'PATCH',
-    body: JSON.stringify({ status }),
-  });
-  return body.data ?? [];
+export async function batchUpdateCaseOrderStatuses(status: string, etaMinutes?: number) {
+  try {
+    const body = await apiFetch<ApiEnvelope<RiderOrder[]>>(`/riders/case/orders/batch-status`, {
+      method: 'PATCH',
+      body: JSON.stringify({
+        status,
+        ...(etaMinutes != null ? { etaMinutes } : {}),
+      }),
+    });
+    return body.data ?? [];
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (status === 'PROCESSING' && msg.includes('PICKED_UP')) {
+      const body = await apiFetch<ApiEnvelope<RiderOrder[]>>(`/riders/case/orders/batch-status`, {
+        method: 'PATCH',
+        body: JSON.stringify({
+          status: 'PICKED_UP',
+          ...(etaMinutes != null ? { etaMinutes } : {}),
+        }),
+      });
+      return body.data ?? [];
+    }
+    throw err;
+  }
 }
 
-/** @deprecated use markArrived — kept for older call sites */
+/** @deprecated use startOnTheWay / markArrived */
 export async function startDelivery(orderId: string) {
   return markArrived(orderId);
 }
@@ -227,6 +264,12 @@ export async function createCashPaymentSession(input: CashPaymentSessionPayload)
     body: JSON.stringify(input),
   });
   return (body as ApiEnvelope<unknown>).data;
+}
+
+/** Resume an already-sent cash confirmation for this order (rider reopened screen). */
+export async function fetchCashSessionByOrder(orderId: string) {
+  const body = await apiFetch(`/case/cash-sessions/by-order/${orderId}`);
+  return (body as ApiEnvelope<unknown>).data ?? null;
 }
 
 export async function createTopUpSession(input: {

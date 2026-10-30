@@ -1,5 +1,6 @@
 import { requireOptionalNativeModule } from 'expo-modules-core';
-import { Alert } from 'react-native';
+
+import { dialog } from '@/lib/dialog';
 
 type ImagePickerModule = typeof import('expo-image-picker');
 
@@ -16,7 +17,7 @@ function loadImagePicker(): ImagePickerModule | null {
 }
 
 function nativeUnavailableMessage() {
-  Alert.alert(
+  dialog.alert(
     'Photo upload unavailable',
     'Rebuild the app to enable camera and gallery:\n\nnpx expo run:android\n\n(or use a dev client build after installing expo-image-picker)',
   );
@@ -31,7 +32,7 @@ export async function pickDocumentImage(label: string): Promise<string | null> {
 
   const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
   if (!perm.granted) {
-    Alert.alert('Permission needed', `Allow photo access to upload your ${label}.`);
+    dialog.alert('Permission needed', `Allow photo access to upload your ${label}.`);
     return null;
   }
 
@@ -59,7 +60,7 @@ export async function takeDocumentPhoto(label: string): Promise<string | null> {
 
   const perm = await ImagePicker.requestCameraPermissionsAsync();
   if (!perm.granted) {
-    Alert.alert('Permission needed', `Allow camera access to capture your ${label}.`);
+    dialog.alert('Permission needed', `Allow camera access to capture your ${label}.`);
     return null;
   }
 
