@@ -1,7 +1,6 @@
 import { View, StyleSheet, ScrollView, ActivityIndicator } from 'react-native';
-import { useLocalSearchParams, useRouter } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
-import { memo } from 'react';
+import { useLocalSearchParams } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ScreenHeader } from '@/components/screen-header';
 import { RiderEarningsDashboardCard } from '@/components/RiderEarningsDashboardCard';
@@ -16,13 +15,13 @@ import { formatJmd } from '@/lib/money';
 export default function ShiftDetailsScreen() {
   const { id } = useLocalSearchParams();
   const theme = useTheme();
-  const router = useRouter();
+  const insets = useSafeAreaInsets();
   const pastShiftsQ = usePastShiftsQuery(true);
 
   if (pastShiftsQ.isLoading) {
     return (
       <View style={[styles.root, { backgroundColor: theme.background }]}>
-        <ScreenHeader title="Shift Details" showBack />
+        <ScreenHeader title="Shift Details" />
         <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
           <ActivityIndicator color={theme.primary} />
         </View>
@@ -35,7 +34,7 @@ export default function ShiftDetailsScreen() {
   if (!shift) {
     return (
       <View style={[styles.root, { backgroundColor: theme.background }]}>
-        <ScreenHeader title="Shift Details" showBack />
+        <ScreenHeader title="Shift Details" />
         <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
           <ThemedText themeColor="textSecondary">Shift not found</ThemedText>
         </View>
@@ -45,9 +44,9 @@ export default function ShiftDetailsScreen() {
 
   return (
     <View style={[styles.root, { backgroundColor: theme.background }]}>
-      <ScreenHeader title="Shift Details" showBack />
+      <ScreenHeader title="Shift Details" />
       
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 40 }]}>
         <RiderEarningsDashboardCard
           shift={shift}
           activeOrdersCount={0}
@@ -94,6 +93,5 @@ const styles = StyleSheet.create({
   content: {
     padding: Layout.screenPadding,
     gap: Spacing.four,
-    paddingBottom: Layout.safeAreaBottom + 40,
   },
 });

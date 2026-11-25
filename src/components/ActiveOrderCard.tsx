@@ -7,6 +7,7 @@ import { Ionicons } from '@expo/vector-icons';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 
 import { DeliveryProgressBar } from '@/components/DeliveryProgressBar';
+import { OrderChatButton } from '@/components/OrderChatButton';
 import { OrderLocationBlock } from '@/components/OrderLocationBlock';
 import { SwipeToConfirm } from '@/components/SwipeToConfirm';
 import { ThemedText } from '@/components/themed-text';
@@ -21,7 +22,13 @@ import { useEtaPicker } from '@/hooks/use-eta-picker';
 import { useTheme } from '@/hooks/use-theme';
 import { prefetchRiderOrder } from '@/hooks/queries/rider';
 import { formatJmd, formatUsd, riderEarningForOrder } from '@/lib/money';
-import { formatDeliveryAddress, formatRestaurantAddress, orderDisplayId } from '@/lib/orderDisplay';
+import {
+  formatDeliveryAddress,
+  formatPickupAddress,
+  formatPickupNames,
+  orderDisplayId,
+  orderPickups,
+} from '@/lib/orderDisplay';
 import type { RiderOrder } from '@/types/rider';
 
 type RiderCardAction =
@@ -46,16 +53,12 @@ export const ActiveOrderCard = memo(function ActiveOrderCard({ order, busy, onAc
   const theme = useTheme();
   const router = useRouter();
   const qc = useQueryClient();
-  const restaurant =
-    typeof order.restaurantId === 'object' ? order.restaurantId?.restaurantName ?? 'Restaurant' : 'Restaurant';
-  const restaurantPhone =
-    typeof order.restaurantId === 'object'
-      ? (order.restaurantId as { phone?: string })?.phone
-      : undefined;
+  const pickups = orderPickups(order);
   const customer =
     typeof order.customerId === 'object' ? order.customerId?.fullName ?? 'Customer' : 'Customer';
   const customerPhone =
     typeof order.customerId === 'object' ? order.customerId?.mobile : undefined;
+  const customerNote = String(order.generalNote || order.notes || '').trim();
   const next = nextRiderAction(order.orderStatus);
   const canReject =
     order.orderStatus === 'RIDER_ASSIGNED' ||
@@ -80,10 +83,15 @@ export const ActiveOrderCard = memo(function ActiveOrderCard({ order, busy, onAc
   const [swipeKey, setSwipeKey] = useState(0);
   const { pickEta, etaPickerModal } = useEtaPicker();
 
+  const deferredFee = Boolean(
+    (order as { deliveryFeeDeferred?: boolean }).deliveryFeeDeferred ||
+      (order as { settlement?: { deliveryFeeDeferred?: boolean } }).settlement?.deliveryFeeDeferred,
+  );
+
   const runPrimary = useCallback(async () => {
     if (!next) return;
-    // COD must record cash + wait for customer confirm — never skip to completeDelivery.
-    if (next === 'complete' && isCod) {
+    // COD / Get Anything: record fee+cash and wait for customer confirm ? never skip.
+    if (next === 'complete' && (isCod || deferredFee)) {
       router.push(`/order/payment/${order._id}` as never);
       setSwipeKey((k) => k + 1);
       return;
@@ -102,7 +110,7 @@ export const ActiveOrderCard = memo(function ActiveOrderCard({ order, busy, onAc
     if (handled === false) {
       setSwipeKey((k) => k + 1);
     }
-  }, [next, isCod, onAction, order._id, router, pickEta]);
+  }, [next, isCod, deferredFee, onAction, order._id, router, pickEta]);
 
   return (
     <Animated.View
@@ -117,15 +125,18 @@ export const ActiveOrderCard = memo(function ActiveOrderCard({ order, busy, onAc
 
       <View style={styles.top}>
         <ThemedText style={styles.orderId}>{orderDisplayId(order)}</ThemedText>
-        <Pressable
-          onPressIn={prefetchDetails}
-          onPress={openDetails}
-          style={[styles.detailsBtn, { borderColor: theme.border }]}>
-          <ThemedText type="link" style={styles.detailsText}>
-            Details
-          </ThemedText>
-          <Ionicons name="chevron-forward" size={14} color={theme.primary} />
-        </Pressable>
+        <View style={styles.topActions}>
+          <OrderChatButton orderId={order._id} compact enabled />
+          <Pressable
+            onPressIn={prefetchDetails}
+            onPress={openDetails}
+            style={[styles.detailsBtn, { borderColor: theme.border }]}>
+            <ThemedText type="link" style={styles.detailsText}>
+              Details
+            </ThemedText>
+            <Ionicons name="chevron-forward" size={14} color={theme.primary} />
+          </Pressable>
+        </View>
       </View>
 
       <View style={styles.progressWrap}>
@@ -133,13 +144,29 @@ export const ActiveOrderCard = memo(function ActiveOrderCard({ order, busy, onAc
       </View>
 
       <View style={styles.locations}>
-        <OrderLocationBlock
-          type="pickup"
-          title="Pickup from"
-          name={restaurant}
-          address={formatRestaurantAddress(order)}
-          phone={restaurantPhone}
-        />
+        {pickups.length ? (
+          pickups.map((pickup, index) => (
+            <OrderLocationBlock
+              key={pickup._id || `pickup-${index}`}
+              type="pickup"
+              title={
+                pickups.length > 1
+                  ? `Pickup ${index + 1} of ${pickups.length}`
+                  : 'Pickup from'
+              }
+              name={pickup.restaurantName || formatPickupNames(order)}
+              address={formatPickupAddress(pickup)}
+              phone={pickup.phone}
+            />
+          ))
+        ) : (
+          <OrderLocationBlock
+            type="pickup"
+            title="Pickup from"
+            name={formatPickupNames(order)}
+            address="Restaurant address on file"
+          />
+        )}
         <OrderLocationBlock
           type="drop"
           title="Deliver to"
@@ -148,6 +175,15 @@ export const ActiveOrderCard = memo(function ActiveOrderCard({ order, busy, onAc
           phone={customerPhone}
         />
       </View>
+
+      {customerNote ? (
+        <View style={[styles.noteBox, { backgroundColor: theme.primarySoft, marginHorizontal: Spacing.three }]}>
+          <ThemedText type="label" style={{ color: theme.primary }}>
+            Customer note
+          </ThemedText>
+          <ThemedText style={styles.noteText}>{customerNote}</ThemedText>
+        </View>
+      ) : null}
 
       <View style={[styles.summarySection, { borderTopColor: theme.border }]}>
         <View style={styles.summaryGrid}>
@@ -244,7 +280,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.three,
     paddingTop: Spacing.three,
   },
-  orderId: { fontSize: 18, fontFamily: Fonts.extraBold },
+  orderId: { fontSize: 18, fontFamily: Fonts.extraBold, flex: 1, minWidth: 0, paddingRight: 8 },
+  topActions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   detailsBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -281,6 +318,14 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
   },
   codText: { fontSize: 10, fontFamily: Fonts.bold },
+  noteBox: {
+    marginTop: Spacing.two,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    gap: 4,
+  },
+  noteText: { fontSize: 13, fontFamily: Fonts.medium, lineHeight: 18 },
   actions: {
     flexDirection: 'column',
     alignItems: 'stretch',

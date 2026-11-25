@@ -1,7 +1,15 @@
 import { apiUploadForm } from '@/lib/apiUpload';
 import { apiFetch } from '@/lib/apiFetch';
 import { logFormDataParts, toUploadFile } from '@/lib/multipart';
-import type { ApiEnvelope, RiderEarnings, RiderOrder, RiderProfile, RiderUser, VehicleType } from '@/types/rider';
+import type {
+  ApiEnvelope,
+  RiderChatMessage,
+  RiderEarnings,
+  RiderOrder,
+  RiderProfile,
+  RiderUser,
+  VehicleType,
+} from '@/types/rider';
 
 /**
  * @deprecated Riders earn the order's delivery fee + tip, not a flat rate.
@@ -201,27 +209,51 @@ export async function markArrived(orderId: string) {
   return asRiderOrder(body.data, orderId);
 }
 
-export async function batchUpdateCaseOrderStatuses(status: string, etaMinutes?: number) {
+export type BatchStatusResult = {
+  updated?: RiderOrder[];
+  updatedCount?: number;
+  skipped?: Array<{ orderId: string; orderNumber?: string; reason: string }>;
+  failed?: Array<{ orderId: string; orderNumber?: string; reason: string }>;
+};
+
+export async function batchUpdateCaseOrderStatuses(input: {
+  status: string;
+  etaMinutes?: number;
+  orderIds?: string[];
+}): Promise<BatchStatusResult> {
+  const { status, etaMinutes, orderIds } = input;
   try {
-    const body = await apiFetch<ApiEnvelope<RiderOrder[]>>(`/riders/case/orders/batch-status`, {
-      method: 'PATCH',
-      body: JSON.stringify({
-        status,
-        ...(etaMinutes != null ? { etaMinutes } : {}),
-      }),
-    });
-    return body.data ?? [];
+    const body = await apiFetch<ApiEnvelope<BatchStatusResult | RiderOrder[]>>(
+      `/riders/case/orders/batch-status`,
+      {
+        method: 'PATCH',
+        body: JSON.stringify({
+          status,
+          ...(etaMinutes != null ? { etaMinutes } : {}),
+          ...(orderIds?.length ? { orderIds } : {}),
+        }),
+      },
+    );
+    const data = body.data;
+    if (Array.isArray(data)) return { updated: data, updatedCount: data.length };
+    return data ?? { updated: [], updatedCount: 0 };
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
     if (status === 'PROCESSING' && msg.includes('PICKED_UP')) {
-      const body = await apiFetch<ApiEnvelope<RiderOrder[]>>(`/riders/case/orders/batch-status`, {
-        method: 'PATCH',
-        body: JSON.stringify({
-          status: 'PICKED_UP',
-          ...(etaMinutes != null ? { etaMinutes } : {}),
-        }),
-      });
-      return body.data ?? [];
+      const body = await apiFetch<ApiEnvelope<BatchStatusResult | RiderOrder[]>>(
+        `/riders/case/orders/batch-status`,
+        {
+          method: 'PATCH',
+          body: JSON.stringify({
+            status: 'PICKED_UP',
+            ...(etaMinutes != null ? { etaMinutes } : {}),
+            ...(orderIds?.length ? { orderIds } : {}),
+          }),
+        },
+      );
+      const data = body.data;
+      if (Array.isArray(data)) return { updated: data, updatedCount: data.length };
+      return data ?? { updated: [], updatedCount: 0 };
     }
     throw err;
   }
@@ -230,6 +262,25 @@ export async function batchUpdateCaseOrderStatuses(status: string, etaMinutes?: 
 /** @deprecated use startOnTheWay / markArrived */
 export async function startDelivery(orderId: string) {
   return markArrived(orderId);
+}
+
+/** Tell the customer selected item(s) ran out of stock (pre-purchase only). */
+export async function reportItemsOutOfStock(
+  orderId: string,
+  itemIds: string[],
+  reason?: string,
+) {
+  const body = await apiFetch<ApiEnvelope<RiderOrder>>(
+    `/riders/case/orders/${orderId}/unavailable`,
+    {
+      method: 'POST',
+      body: JSON.stringify({
+        itemIds,
+        ...(reason ? { reason } : {}),
+      }),
+    },
+  );
+  return asRiderOrder(body.data, orderId);
 }
 
 export async function completeDelivery(orderId: string) {
@@ -254,6 +305,8 @@ export type CashPaymentSessionPayload = {
   orderId: string;
   amountReceived: number;
   changeReturned?: number;
+  /** Get Anything — rider-set delivery fee (JMD). */
+  deliveryFee?: number;
   offlineId?: string;
   idempotencyKey?: string;
 };
@@ -270,6 +323,14 @@ export async function createCashPaymentSession(input: CashPaymentSessionPayload)
 export async function fetchCashSessionByOrder(orderId: string) {
   const body = await apiFetch(`/case/cash-sessions/by-order/${orderId}`);
   return (body as ApiEnvelope<unknown>).data ?? null;
+}
+
+/** Re-send push + in-app + socket prompt for a pending cash session. */
+export async function remindCashPaymentSession(sessionId: string) {
+  const body = await apiFetch(`/case/cash-sessions/${sessionId}/remind`, {
+    method: 'POST',
+  });
+  return (body as ApiEnvelope<{ notified?: boolean; id?: string }>).data;
 }
 
 export async function createTopUpSession(input: {
@@ -326,6 +387,34 @@ export async function fetchOrderRoute(orderId: string) {
     `/orders/track/${orderId}/route`,
   );
   return body.data?.path ?? [];
+}
+
+export async function fetchOrderChat(orderId: string): Promise<{
+  messages: RiderChatMessage[];
+  unreadCount: number;
+}> {
+  const body = await apiFetch<
+    ApiEnvelope<
+      RiderChatMessage[] | { messages?: RiderChatMessage[]; unreadCount?: number }
+    >
+  >(`/case/orders/${orderId}/chat`);
+  const data = body.data;
+  const list = Array.isArray(data) ? data : data?.messages ?? [];
+  const messages = list.map((m) => ({
+    ...m,
+    id: m.id ?? m._id ?? '',
+  }));
+  const unreadCount = Array.isArray(data) ? 0 : Number(data?.unreadCount ?? 0);
+  return { messages, unreadCount };
+}
+
+export async function sendOrderChat(orderId: string, message: string): Promise<RiderChatMessage> {
+  const body = await apiFetch<ApiEnvelope<RiderChatMessage>>(`/case/orders/${orderId}/chat`, {
+    method: 'POST',
+    body: JSON.stringify({ body: message }),
+  });
+  const msg = body.data!;
+  return { ...msg, id: msg.id ?? msg._id ?? '' };
 }
 
 export type ShiftPurchaseCategory = 'FUEL' | 'PARKING' | 'FOOD_EXTRA' | 'SUPPLIES' | 'OTHER';

@@ -11,6 +11,7 @@ import { cardStyle, Layout } from '@/constants/layout';
 import { LEGAL_SUPPORT_EMAIL, LegalUrls } from '@/constants/legal';
 import { Fonts, Spacing } from '@/constants/theme';
 import { useRiderProfile } from '@/hooks/use-rider-profile';
+import { useThemeContext } from '@/context/ThemeContext';
 import { useTheme } from '@/hooks/use-theme';
 import { hasUploadedImage } from '@/lib/imageUtils';
 import { formatJmd } from '@/lib/money';
@@ -67,6 +68,7 @@ function StatusChip({ ok, label }: { ok: boolean; label: string }) {
 
 export default function ProfileScreen() {
   const theme = useTheme();
+  const { themePreference, setThemePreference } = useThemeContext();
   const router = useRouter();
   const { rider: data, user, isLoading } = useRiderProfile();
 
@@ -214,7 +216,7 @@ export default function ProfileScreen() {
           </View>
 
           <View style={[styles.infoCard, cardStyle, { backgroundColor: theme.backgroundElement }]}>
-            <InfoRow label="Mobile" value={user?.mobile ?? '—'} icon="call-outline" />
+            <InfoRow label="Mobile" value={user?.mobile ?? 'N/A'} icon="call-outline" />
             <InfoRow
               label="Vehicle"
               value={`${(data?.vehicleType ?? 'bike').toUpperCase()}${data?.vehicleNumber ? ` · ${data.vehicleNumber}` : ''}`}
@@ -231,7 +233,7 @@ export default function ProfileScreen() {
               }
               icon="shield-checkmark-outline"
             />
-            <InfoRow label="Rating" value={`${data?.averageRating?.toFixed(1) ?? '0.0'} ?`} icon="star-outline" />
+            <InfoRow label="Rating" value={data?.averageRating?.toFixed(1) ?? '0.0'} icon="star-outline" />
             <InfoRow label="Deliveries" value={String(data?.totalDeliveries ?? 0)} icon="cube-outline" />
             <InfoRow
               label="Lifetime earnings"
@@ -260,6 +262,29 @@ export default function ProfileScreen() {
             title="Notifications"
             subtitle="Delivery alerts and account updates"
             onPress={() => router.push('/notifications' as never)}
+          />
+
+          <ActionRow
+            icon={themePreference === 'dark' ? 'moon' : 'sunny'}
+            color={theme.primary}
+            title="App Theme"
+            subtitle={themePreference === 'dark' ? 'Dark Mode' : 'Light Mode'}
+            onPress={() => {
+              const next = themePreference === 'dark' ? 'light' : 'dark';
+              dialog.confirm(
+                'Choose App Theme',
+                next === 'dark'
+                  ? 'Switch the rider app to Dark Mode?'
+                  : 'Switch the rider app to Light Mode?',
+                {
+                  confirmText: next === 'dark' ? 'Dark Mode' : 'Light Mode',
+                  cancelText: 'Cancel',
+                  onConfirm: () => {
+                    void setThemePreference(next);
+                  },
+                },
+              );
+            }}
           />
 
           <ActionRow

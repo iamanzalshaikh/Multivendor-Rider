@@ -1,6 +1,6 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   View,
   StyleSheet,
@@ -9,13 +9,13 @@ import {
   ActivityIndicator,
   RefreshControl,
   Image,
-  Modal,
   TextInput,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { dialog } from '@/lib/dialog';
 import { Ionicons } from '@expo/vector-icons';
 
+import { BatchUpdateModal } from '@/components/BatchUpdateModal';
 import { EarningsHeroCard } from '@/components/EarningsHeroCard';
 import { ScreenHeader } from '@/components/screen-header';
 import { SectionCard } from '@/components/section-card';
@@ -44,6 +44,8 @@ import { hasUploadedImage } from '@/lib/imageUtils';
 import { emitRiderOnlineStatus } from '@/lib/riderSocketActions';
 import { formatJmd, riderEarningForOrder } from '@/lib/money';
 import { countPendingCashSessions, syncPendingCashSessions } from '@/lib/offlineCashQueue';
+import { useEtaPicker } from '@/hooks/use-eta-picker';
+import type { BatchTargetStatus } from '@/lib/batchUpdate';
 import { batchUpdateCaseOrderStatuses, updateRiderOnlineStatus } from '@/services/riders';
 import { useRiderStore } from '@/stores/riderStore';
 import type { VerificationStatus, RiderProfile, RiderOrder } from '@/types/rider';
@@ -79,6 +81,7 @@ export default function HomeScreen() {
   const shiftQ = useShiftPurchasesQuery(true);
   const [pendingSync, setPendingSync] = useState(0);
   const [showBatchModal, setShowBatchModal] = useState(false);
+  const { pickEta, etaPickerModal } = useEtaPicker();
 
   useEffect(() => {
     void (async () => {
@@ -123,13 +126,29 @@ export default function HomeScreen() {
     },
   });
 
+  const activeOrders = useMemo(() => {
+    return activeOrderIds
+      .map((id) => qc.getQueryData<RiderOrder>(riderKeys.order(id)))
+      .filter((o): o is RiderOrder => Boolean(o));
+  }, [activeOrderIds, qc, showBatchModal]);
+
   const batchUpdateMut = useMutation({
-    mutationFn: (status: string) => batchUpdateCaseOrderStatuses(status),
-    onSuccess: () => {
-      toast.success('Successfully updated all active deliveries.');
+    mutationFn: (input: {
+      status: BatchTargetStatus;
+      orderIds: string[];
+      etaMinutes?: number;
+    }) => batchUpdateCaseOrderStatuses(input),
+    onSuccess: (result, vars) => {
+      const updated = result.updatedCount ?? result.updated?.length ?? vars.orderIds.length;
+      const failed = result.failed?.length ?? 0;
+      toast.success(
+        failed > 0
+          ? `Updated ${updated}. ${failed} could not move with this batch.`
+          : `Updated ${updated} deliveries.`,
+      );
       setShowBatchModal(false);
-      activeOrderIds.forEach(id => {
-        qc.invalidateQueries({ queryKey: riderKeys.order(id) });
+      activeOrderIds.forEach((id) => {
+        void qc.invalidateQueries({ queryKey: riderKeys.order(id) });
       });
     },
     onError: (e) => {
@@ -448,38 +467,23 @@ export default function HomeScreen() {
         </Pressable>
       </View>
 
-      <Modal visible={showBatchModal} transparent animationType="fade">
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, { backgroundColor: theme.backgroundElement }]}>
-            <View style={[styles.modalIconWrap, { backgroundColor: theme.primarySoft }]}>
-              <Ionicons name="list" size={28} color={theme.primary} />
-            </View>
-            <ThemedText style={styles.modalTitle}>Batch Update</ThemedText>
-            <ThemedText themeColor="textSecondary" style={styles.modalSubtitle}>
-              Update the status of all your active deliveries at once.
-            </ThemedText>
-
-            <View style={{ width: '100%', gap: Spacing.two, marginBottom: Spacing.four }}>
-              {['PROCESSING', 'ON_THE_WAY', 'ARRIVED'].map((status) => (
-                <Pressable
-                  key={status}
-                  style={[styles.modalButton, styles.modalButtonCancel, { borderColor: theme.border, marginBottom: 8 }]}
-                  onPress={() => batchUpdateMut.mutate(status)}>
-                  <ThemedText style={{ fontFamily: Fonts.bold }}>
-                    {status === 'PROCESSING' ? 'Processing' : status.replace(/_/g, ' ')}
-                  </ThemedText>
-                </Pressable>
-              ))}
-            </View>
-
-            <Pressable
-              style={[styles.modalButton, styles.modalButtonConfirm, { backgroundColor: theme.textSecondary }]}
-              onPress={() => setShowBatchModal(false)}>
-              <ThemedText style={styles.modalButtonConfirmText}>Cancel</ThemedText>
-            </Pressable>
-          </View>
-        </View>
-      </Modal>
+      <BatchUpdateModal
+        visible={showBatchModal}
+        orders={activeOrders}
+        busy={batchUpdateMut.isPending}
+        onClose={() => setShowBatchModal(false)}
+        onConfirm={async ({ status, orderIds }) => {
+          if (status === 'ON_THE_WAY') {
+            setShowBatchModal(false);
+            const eta = await pickEta();
+            if (eta == null) return;
+            batchUpdateMut.mutate({ status, orderIds, etaMinutes: eta });
+            return;
+          }
+          batchUpdateMut.mutate({ status, orderIds });
+        }}
+      />
+      {etaPickerModal}
     </TabScrollView>
   );
 }

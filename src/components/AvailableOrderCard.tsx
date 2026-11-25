@@ -11,9 +11,11 @@ import { prefetchRiderOrder } from '@/hooks/queries/rider';
 import { useTheme } from '@/hooks/use-theme';
 import {
   formatDeliveryAddress,
+  formatPickupNames,
   formatRestaurantAddress,
   itemCount,
   orderDisplayId,
+  orderPickups,
 } from '@/lib/orderDisplay';
 import { formatJmd, formatOrderTotal, riderEarningForOrder } from '@/lib/money';
 import type { RiderOrder } from '@/types/rider';
@@ -28,8 +30,9 @@ export const AvailableOrderCard = memo(function AvailableOrderCard({ order, busy
   const theme = useTheme();
   const router = useRouter();
   const qc = useQueryClient();
-  const restaurant =
-    typeof order.restaurantId === 'object' ? order.restaurantId?.restaurantName ?? 'Restaurant' : 'Restaurant';
+  const pickups = orderPickups(order);
+  const restaurant = formatPickupNames(order);
+  const multiStore = pickups.length > 1;
   const items = itemCount(order);
 
   const openDetails = useCallback(() => {
@@ -67,13 +70,19 @@ export const AvailableOrderCard = memo(function AvailableOrderCard({ order, busy
       <View style={styles.routeCompact}>
         <View style={styles.routeLine}>
           <Ionicons name="storefront-outline" size={14} color={theme.primary} />
-          <ThemedText style={styles.routeName} numberOfLines={1}>
+          <ThemedText style={styles.routeName} numberOfLines={multiStore ? 2 : 1}>
             {restaurant}
           </ThemedText>
         </View>
-        <ThemedText type="small" themeColor="textSecondary" numberOfLines={1} style={styles.routeAddr}>
-          {formatRestaurantAddress(order)}
-        </ThemedText>
+        {multiStore ? (
+          <ThemedText type="small" themeColor="textSecondary" numberOfLines={1} style={styles.routeAddr}>
+            {pickups.length} store pickups
+          </ThemedText>
+        ) : (
+          <ThemedText type="small" themeColor="textSecondary" numberOfLines={1} style={styles.routeAddr}>
+            {formatRestaurantAddress(order)}
+          </ThemedText>
+        )}
         <View style={[styles.routeLine, { marginTop: 4 }]}>
           <Ionicons name="location-outline" size={14} color={theme.partner} />
           <ThemedText type="small" themeColor="textSecondary" numberOfLines={1} style={styles.routeDrop}>
