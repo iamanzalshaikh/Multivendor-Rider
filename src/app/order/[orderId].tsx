@@ -5,6 +5,7 @@ import {
   StyleSheet,
   Pressable,
   ActivityIndicator,
+  Image,
   ScrollView,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -440,6 +441,18 @@ export default function OrderDetailScreen() {
                         <ThemedText type="small" style={{ color: theme.danger, marginTop: 2 }}>
                           Out of stock
                         </ThemedText>
+                      ) : null}
+                      {item.imageUrls && item.imageUrls.length > 0 ? (
+                        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 8 }} contentContainerStyle={{ gap: 8 }}>
+                          {item.imageUrls.map((url, k) => (
+                            <Image
+                              key={`${url}-${k}`}
+                              source={{ uri: url }}
+                              accessibilityLabel="Customer reference photo"
+                              style={{ width: 96, height: 96, borderRadius: 10, backgroundColor: theme.backgroundElement }}
+                            />
+                          ))}
+                        </ScrollView>
                       ) : null}
                       {storeLabel ? (
                         <ThemedText type="small" themeColor="textSecondary" numberOfLines={1}>
