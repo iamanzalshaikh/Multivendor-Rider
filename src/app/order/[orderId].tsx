@@ -16,6 +16,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { DeliveryProgressBar } from '@/components/DeliveryProgressBar';
 import { OrderChatButton } from '@/components/OrderChatButton';
 import { OrderLocationBlock, OrderPickupsSummaryBlock } from '@/components/OrderLocationBlock';
+import { GetAnythingAmountsCard } from '@/components/GetAnythingAmountsCard';
 import { PurchaseAmountModal, type PurchaseLine } from '@/components/PurchaseAmountModal';
 import type { RiderOrderItem } from '@/types/rider';
 import { SwipeToConfirm } from '@/components/SwipeToConfirm';
@@ -388,6 +389,14 @@ export default function OrderDetailScreen() {
             </ThemedText>
             <ThemedText style={styles.noteBody}>{customerNote}</ThemedText>
           </View>
+        ) : null}
+
+        {getAnythingLines(order).length ? (
+          <GetAnythingAmountsCard
+            order={order}
+            canEnterPurchase={canReportOutOfStock(order)}
+            onEnterPurchase={() => setPurchaseOpen(true)}
+          />
         ) : null}
 
         <View style={[styles.summaryCard, cardStyle, { backgroundColor: theme.backgroundElement }]}>
