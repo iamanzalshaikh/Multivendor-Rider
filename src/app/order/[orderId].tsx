@@ -77,12 +77,19 @@ function resolveOrderId(raw: string | string[] | undefined): string | undefined 
 function getAnythingLines(order: { items?: RiderOrderItem[]; orderItems?: RiderOrderItem[]; settlement?: unknown } | undefined): PurchaseLine[] {
   if (!order) return [];
   return getAnythingItems(order)
-    .map((i) => ({
-      itemId: String(i.id ?? i._id ?? ''),
-      name: i.itemName,
-      quantity: i.quantity,
-      estimate: Number(i.price ?? 0) * Number(i.quantity || 1),
-    }))
+    .map((i) => {
+      const id = String(i.id ?? i._id ?? '');
+      const settlement = order.settlement as { getAnything?: { estimatedItemPrices?: Record<string, number> } } | null;
+      const savedEstimate = settlement?.getAnything?.estimatedItemPrices?.[id];
+      const lineTotal = Number(i.price ?? 0) * Number(i.quantity || 1);
+      return {
+        itemId: id,
+        name: i.itemName,
+        quantity: i.quantity,
+        estimate: savedEstimate != null ? Number(savedEstimate) : lineTotal,
+        current: lineTotal,
+      };
+    })
     .filter((l) => l.itemId);
 }
 
@@ -305,7 +312,9 @@ export default function OrderDetailScreen() {
         onConfirm={async (prices) => {
           setPurchaseSaving(true);
           try {
-            await setPurchasedPrices(orderId!, prices);
+            const saved = await setPurchasedPrices(orderId!, prices);
+            // Show the saved order right away; don't depend on a refetch.
+            qc.setQueryData(riderKeys.order(orderId!), saved);
             setPurchaseOpen(false);
             actionMut.mutate({ action: 'processing' });
           } catch (e) {
