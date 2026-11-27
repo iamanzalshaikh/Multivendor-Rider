@@ -27,6 +27,7 @@ import {
   formatPickupAddress,
   formatPickupNames,
   orderDisplayId,
+  isGetAnythingOrder,
   orderPickups,
 } from '@/lib/orderDisplay';
 import type { RiderOrder } from '@/types/rider';
@@ -144,7 +145,14 @@ export const ActiveOrderCard = memo(function ActiveOrderCard({ order, busy, onAc
       </View>
 
       <View style={styles.locations}>
-        {pickups.length ? (
+        {isGetAnythingOrder(order) ? (
+          <OrderLocationBlock
+            type="pickup"
+            title="Get Anything request"
+            name="Buy from any shop"
+            address="Buy the items the customer listed and enter what you paid."
+          />
+        ) : pickups.length ? (
           pickups.map((pickup, index) => (
             <OrderLocationBlock
               key={pickup._id || `pickup-${index}`}

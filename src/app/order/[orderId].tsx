@@ -38,6 +38,9 @@ import {
   formatPickupAddress,
   formatPickupNames,
   itemCount,
+  canEnterPurchaseAmount,
+  getAnythingItems,
+  isGetAnythingOrder,
   orderDisplayId,
   orderPickups,
 } from '@/lib/orderDisplay';
@@ -71,10 +74,9 @@ function resolveOrderId(raw: string | string[] | undefined): string | undefined 
 }
 
 /** Custom (Get Anything) lines that still need the rider's actual purchase amount. */
-function getAnythingLines(order: { items?: RiderOrderItem[]; orderItems?: RiderOrderItem[] } | undefined): PurchaseLine[] {
-  const list = order?.items ?? order?.orderItems ?? [];
-  return list
-    .filter((i) => i.itemType === 'CUSTOM_REQUEST')
+function getAnythingLines(order: { items?: RiderOrderItem[]; orderItems?: RiderOrderItem[]; settlement?: unknown } | undefined): PurchaseLine[] {
+  if (!order) return [];
+  return getAnythingItems(order)
     .map((i) => ({
       itemId: String(i.id ?? i._id ?? ''),
       name: i.itemName,
@@ -331,7 +333,14 @@ export default function OrderDetailScreen() {
           <DeliveryProgressBar status={order.orderStatus} />
         </View>
 
-        {pickups.length > 1 ? (
+        {isGetAnythingOrder(order) ? (
+          <OrderLocationBlock
+            type="pickup"
+            title="Get Anything request"
+            name="Buy from any shop"
+            address="The customer listed these items. Buy them from any shop and enter what you paid."
+          />
+        ) : pickups.length > 1 ? (
           <OrderPickupsSummaryBlock
             title={`Pickups · ${pickups.length} shops`}
             names={pickups.map((p) => p.restaurantName || 'Store')}
@@ -403,10 +412,10 @@ export default function OrderDetailScreen() {
           </View>
         ) : null}
 
-        {getAnythingLines(order).length ? (
+        {isGetAnythingOrder(order) ? (
           <GetAnythingAmountsCard
             order={order}
-            canEnterPurchase={canReportOutOfStock(order)}
+            canEnterPurchase={canEnterPurchaseAmount(order)}
             onEnterPurchase={() => setPurchaseOpen(true)}
           />
         ) : null}
