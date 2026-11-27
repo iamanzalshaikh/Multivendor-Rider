@@ -23,6 +23,8 @@ import { useTabBarHeight } from '@/hooks/use-tab-bar-height';
 import { useRiderProfile } from '@/hooks/use-rider-profile';
 import { useTheme } from '@/hooks/use-theme';
 import { acceptOrder } from '@/services/riders';
+import { addActiveTrip, removeActiveTrip } from '@/lib/activeTrips';
+import { riderKeys } from '@/hooks/queries/keys';
 import type { RiderOrder } from '@/types/rider';
 
 export default function JobsScreen() {
@@ -37,16 +39,25 @@ export default function JobsScreen() {
     mutationFn: (orderId: string) => acceptOrder(orderId),
     onSuccess: (_, orderId) => {
       invalidateAfterOrderAction(qc, orderId);
-      router.push('/(tabs)/orders');
     },
-    onError: (e) => dialog.alert('Could not accept', e instanceof Error ? e.message : 'Try again'),
+    onError: (e, orderId) => {
+      removeActiveTrip(qc, orderId);
+      dialog.alert('Could not accept', e instanceof Error ? e.message : 'Try again');
+    },
   });
 
   const handleAccept = useCallback(
-    (orderId: string) => {
-      if (!acceptMut.isPending) acceptMut.mutate(orderId);
+    (order: RiderOrder) => {
+      if (acceptMut.isPending) return;
+      // Open the trip right away; the server confirms in the background.
+      addActiveTrip(qc, order._id);
+      if (!qc.getQueryData(riderKeys.order(order._id))) {
+        qc.setQueryData(riderKeys.order(order._id), order);
+      }
+      acceptMut.mutate(order._id);
+      router.replace('/(tabs)/orders');
     },
-    [acceptMut],
+    [acceptMut, qc, router],
   );
 
   const available = (availableQ.data ?? []).filter((o) => !activeOrderIds.includes(o._id));
@@ -56,7 +67,7 @@ export default function JobsScreen() {
       <AvailableOrderCard
         order={item}
         busy={acceptMut.isPending}
-        onAccept={() => handleAccept(item._id)}
+        onAccept={() => handleAccept(item)}
       />
     ),
     [acceptMut.isPending, handleAccept],

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { BackHandler, Modal, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -10,8 +10,10 @@ export type PurchaseLine = {
   itemId: string;
   name: string;
   quantity: number;
-  /** Customer's estimate (what they expected to spend). */
+  /** Customer's estimate for the line (what they expected to spend). */
   estimate: number;
+  /** Amount already entered for the line, if any. */
+  current?: number;
 };
 
 type Props = {
@@ -28,11 +30,20 @@ export function PurchaseAmountModal({ visible, lines, busy, onConfirm, onCancel 
   const [values, setValues] = useState<Record<string, string>>({});
   const [error, setError] = useState<string | null>(null);
 
+  // Latest lines without making them an effect dependency (lines is rebuilt each render).
+  const linesRef = useRef(lines);
+  linesRef.current = lines;
+
+  // Fill the inputs only when the popup opens — never on re-render.
   useEffect(() => {
     if (!visible) return;
     setError(null);
-    setValues(Object.fromEntries(lines.map((l) => [l.itemId, String(Math.round(l.estimate))])));
-  }, [visible, lines]);
+    setValues(
+      Object.fromEntries(
+        linesRef.current.map((l) => [l.itemId, String(Math.round(l.current ?? l.estimate))]),
+      ),
+    );
+  }, [visible]);
 
   useEffect(() => {
     if (!visible) return;

@@ -1,6 +1,44 @@
-import type { RiderOrder } from '@/types/rider';
+import type { RiderOrder, RiderOrderItem } from '@/types/rider';
 
 export type RiderPickup = NonNullable<RiderOrder['pickups']>[number];
+
+/** Statuses after the rider has bought the items — the purchase amount is locked. */
+const BOUGHT_STATUSES = [
+  'PROCESSING',
+  'PICKED_UP',
+  'ON_THE_WAY',
+  'ARRIVED',
+  'DELIVERED',
+  'COMPLETED',
+  'CANCELLED',
+  'PARTIAL_PENDING_CUSTOMER',
+];
+
+/**
+ * Get Anything lines: the customer asked for items from any shop, so they are
+ * custom requests with no store attached.
+ */
+export function getAnythingItems(order: {
+  items?: RiderOrderItem[];
+  orderItems?: RiderOrderItem[];
+  settlement?: unknown;
+}): RiderOrderItem[] {
+  const list = order.items ?? order.orderItems ?? [];
+  const flagged = list.filter((i) => i.itemType === 'CUSTOM_REQUEST');
+  if (flagged.length) return flagged;
+  // Payloads without itemType: once the purchase is saved, lines without a store are Get Anything.
+  const saved = Boolean((order.settlement as { getAnything?: unknown } | null)?.getAnything);
+  return saved ? list.filter((i) => !i.restaurantId) : [];
+}
+
+export function isGetAnythingOrder(order: Parameters<typeof getAnythingItems>[0]): boolean {
+  return getAnythingItems(order).length > 0;
+}
+
+/** The rider can enter the purchase amount while items are not yet bought. */
+export function canEnterPurchaseAmount(order: { orderStatus: string; riderId?: unknown }): boolean {
+  return Boolean(order.riderId) && !BOUGHT_STATUSES.includes(order.orderStatus);
+}
 
 /** Every store the rider must visit (multi-store CASE orders). */
 export function orderPickups(order: RiderOrder): RiderPickup[] {

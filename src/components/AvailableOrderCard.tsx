@@ -13,6 +13,7 @@ import {
   formatDeliveryAddress,
   formatPickupNames,
   formatRestaurantAddress,
+  isGetAnythingOrder,
   itemCount,
   orderDisplayId,
   orderPickups,
@@ -31,7 +32,8 @@ export const AvailableOrderCard = memo(function AvailableOrderCard({ order, busy
   const router = useRouter();
   const qc = useQueryClient();
   const pickups = orderPickups(order);
-  const restaurant = formatPickupNames(order);
+  const getAnything = isGetAnythingOrder(order);
+  const restaurant = getAnything ? 'Get Anything request' : formatPickupNames(order);
   const multiStore = pickups.length > 1;
   const items = itemCount(order);
 
@@ -80,7 +82,7 @@ export const AvailableOrderCard = memo(function AvailableOrderCard({ order, busy
           </ThemedText>
         ) : (
           <ThemedText type="small" themeColor="textSecondary" numberOfLines={1} style={styles.routeAddr}>
-            {formatRestaurantAddress(order)}
+            {getAnything ? "Buy from any shop" : formatRestaurantAddress(order)}
           </ThemedText>
         )}
         <View style={[styles.routeLine, { marginTop: 4 }]}>

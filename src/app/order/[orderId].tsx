@@ -5,16 +5,20 @@ import {
   StyleSheet,
   Pressable,
   ActivityIndicator,
+  Image,
+  Modal,
   ScrollView,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { dialog } from '@/lib/dialog';
+import { addActiveTrip, removeActiveTrip } from '@/lib/activeTrips';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 
 import { DeliveryProgressBar } from '@/components/DeliveryProgressBar';
 import { OrderChatButton } from '@/components/OrderChatButton';
 import { OrderLocationBlock, OrderPickupsSummaryBlock } from '@/components/OrderLocationBlock';
+import { GetAnythingAmountsCard } from '@/components/GetAnythingAmountsCard';
 import { PurchaseAmountModal, type PurchaseLine } from '@/components/PurchaseAmountModal';
 import type { RiderOrderItem } from '@/types/rider';
 import { SwipeToConfirm } from '@/components/SwipeToConfirm';
@@ -35,6 +39,9 @@ import {
   formatPickupAddress,
   formatPickupNames,
   itemCount,
+  canEnterPurchaseAmount,
+  getAnythingItems,
+  isGetAnythingOrder,
   orderDisplayId,
   orderPickups,
 } from '@/lib/orderDisplay';
@@ -68,16 +75,22 @@ function resolveOrderId(raw: string | string[] | undefined): string | undefined 
 }
 
 /** Custom (Get Anything) lines that still need the rider's actual purchase amount. */
-function getAnythingLines(order: { items?: RiderOrderItem[]; orderItems?: RiderOrderItem[] } | undefined): PurchaseLine[] {
-  const list = order?.items ?? order?.orderItems ?? [];
-  return list
-    .filter((i) => i.itemType === 'CUSTOM_REQUEST')
-    .map((i) => ({
-      itemId: String(i.id ?? i._id ?? ''),
-      name: i.itemName,
-      quantity: i.quantity,
-      estimate: Number(i.price ?? 0) * Number(i.quantity || 1),
-    }))
+function getAnythingLines(order: { items?: RiderOrderItem[]; orderItems?: RiderOrderItem[]; settlement?: unknown } | undefined): PurchaseLine[] {
+  if (!order) return [];
+  return getAnythingItems(order)
+    .map((i) => {
+      const id = String(i.id ?? i._id ?? '');
+      const settlement = order.settlement as { getAnything?: { estimatedItemPrices?: Record<string, number> } } | null;
+      const savedEstimate = settlement?.getAnything?.estimatedItemPrices?.[id];
+      const lineTotal = Number(i.price ?? 0) * Number(i.quantity || 1);
+      return {
+        itemId: id,
+        name: i.itemName,
+        quantity: i.quantity,
+        estimate: savedEstimate != null ? Number(savedEstimate) : lineTotal,
+        current: lineTotal,
+      };
+    })
     .filter((l) => l.itemId);
 }
 
@@ -90,6 +103,7 @@ export default function OrderDetailScreen() {
   const [swipeKey, setSwipeKey] = useState(0);
   const { pickEta, etaPickerModal } = useEtaPicker();
   const [purchaseOpen, setPurchaseOpen] = useState(false);
+  const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const [purchaseSaving, setPurchaseSaving] = useState(false);
 
   const orderQ = useRiderOrderQuery(orderId);
@@ -143,13 +157,15 @@ export default function OrderDetailScreen() {
     },
     onMutate: async ({ action }) => {
       if (!orderId) return;
+      if (action === 'accept') addActiveTrip(qc, orderId);
       const nextStatus = optimisticStatusForAction(action);
       if (!nextStatus) return;
       await qc.cancelQueries({ queryKey: riderKeys.order(orderId) });
       const prev = patchOrderStatusOptimistic(qc, orderId, nextStatus);
       return { prev };
     },
-    onError: (e, _vars, ctx) => {
+    onError: (e, vars, ctx) => {
+      if (orderId && vars.action === 'accept') removeActiveTrip(qc, orderId);
       if (orderId && ctx?.prev) {
         qc.setQueryData(riderKeys.order(orderId), ctx.prev);
       }
@@ -158,13 +174,15 @@ export default function OrderDetailScreen() {
     onSuccess: (_, { action }) => {
       if (!orderId) return;
       if (action === 'complete') {
+        removeActiveTrip(qc, orderId);
         invalidateAfterDeliveryComplete(qc, orderId);
-      } else {
-        invalidateAfterOrderAction(qc, orderId);
+        dialog.alert('Delivery completed', 'The order was delivered and completed successfully.', [
+          { text: 'OK', onPress: () => router.replace('/(tabs)/orders') },
+        ]);
+        return;
       }
-      if (action === 'accept' || action === 'complete' || action === 'reject') {
-        router.replace('/(tabs)/orders');
-      }
+      invalidateAfterOrderAction(qc, orderId);
+      if (action === 'reject') router.replace('/(tabs)/orders');
     },
   });
 
@@ -194,6 +212,8 @@ export default function OrderDetailScreen() {
       return;
     }
     actionMut.mutate({ action });
+    // Accepting opens the trip right away; the server confirms in the background.
+    if (action === 'accept') router.replace('/(tabs)/orders');
   }
 
   if (!orderId) {
@@ -281,6 +301,16 @@ export default function OrderDetailScreen() {
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: theme.background }]} edges={['top', 'bottom']}>
       {etaPickerModal}
+      <Modal visible={Boolean(photoPreview)} transparent animationType="fade" onRequestClose={() => setPhotoPreview(null)}>
+        <Pressable style={styles.photoOverlay} onPress={() => setPhotoPreview(null)}>
+          {photoPreview ? (
+            <Image source={{ uri: photoPreview }} style={styles.photoFull} resizeMode="contain" />
+          ) : null}
+          <Pressable style={styles.photoClose} onPress={() => setPhotoPreview(null)} hitSlop={12}>
+            <Ionicons name="close" size={26} color="#fff" />
+          </Pressable>
+        </Pressable>
+      </Modal>
       <PurchaseAmountModal
         visible={purchaseOpen}
         lines={getAnythingLines(order)}
@@ -289,7 +319,9 @@ export default function OrderDetailScreen() {
         onConfirm={async (prices) => {
           setPurchaseSaving(true);
           try {
-            await setPurchasedPrices(orderId!, prices);
+            const saved = await setPurchasedPrices(orderId!, prices);
+            // Show the saved order right away; don't depend on a refetch.
+            qc.setQueryData(riderKeys.order(orderId!), saved);
             setPurchaseOpen(false);
             actionMut.mutate({ action: 'processing' });
           } catch (e) {
@@ -317,7 +349,14 @@ export default function OrderDetailScreen() {
           <DeliveryProgressBar status={order.orderStatus} />
         </View>
 
-        {pickups.length > 1 ? (
+        {isGetAnythingOrder(order) ? (
+          <OrderLocationBlock
+            type="pickup"
+            title="Get Anything request"
+            name="Buy from any shop"
+            address="The customer listed these items. Buy them from any shop and enter what you paid."
+          />
+        ) : pickups.length > 1 ? (
           <OrderPickupsSummaryBlock
             title={`Pickups · ${pickups.length} shops`}
             names={pickups.map((p) => p.restaurantName || 'Store')}
@@ -389,6 +428,14 @@ export default function OrderDetailScreen() {
           </View>
         ) : null}
 
+        {isGetAnythingOrder(order) ? (
+          <GetAnythingAmountsCard
+            order={order}
+            canEnterPurchase={canEnterPurchaseAmount(order)}
+            onEnterPurchase={() => setPurchaseOpen(true)}
+          />
+        ) : null}
+
         <View style={[styles.summaryCard, cardStyle, { backgroundColor: theme.backgroundElement }]}>
           <ThemedText type="label" themeColor="textSecondary">
             Order summary
@@ -440,6 +487,23 @@ export default function OrderDetailScreen() {
                         <ThemedText type="small" style={{ color: theme.danger, marginTop: 2 }}>
                           Out of stock
                         </ThemedText>
+                      ) : null}
+                      {item.imageUrls && item.imageUrls.length > 0 ? (
+                        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 8 }} contentContainerStyle={{ gap: 8 }}>
+                          {item.imageUrls.map((url, k) => (
+                            <Pressable
+                              key={`${url}-${k}`}
+                              onPress={() => setPhotoPreview(url)}
+                              accessibilityRole="imagebutton"
+                              accessibilityLabel="Open customer reference photo"
+                            >
+                              <Image
+                                source={{ uri: url }}
+                                style={{ width: 96, height: 96, borderRadius: 10, backgroundColor: theme.backgroundElement }}
+                              />
+                            </Pressable>
+                          ))}
+                        </ScrollView>
                       ) : null}
                       {storeLabel ? (
                         <ThemedText type="small" themeColor="textSecondary" numberOfLines={1}>
@@ -595,6 +659,9 @@ export default function OrderDetailScreen() {
 }
 
 const styles = StyleSheet.create({
+  photoOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.92)', alignItems: 'center', justifyContent: 'center' },
+  photoFull: { width: '100%', height: '80%' },
+  photoClose: { position: 'absolute', top: 48, right: 20, padding: 8 },
   safe: { flex: 1 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: Spacing.four },
   nav: {

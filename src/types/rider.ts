@@ -40,6 +40,8 @@ export type RiderOrderItem = {
   id?: string;
   _id?: string;
   itemType?: string;
+  /** Get Anything: customer reference photos. */
+  imageUrls?: string[];
   itemName: string;
   quantity: number;
   price?: number;

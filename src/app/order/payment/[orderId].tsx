@@ -29,6 +29,7 @@ import {
   remindCashPaymentSession,
 } from '@/services/riders';
 import { invalidateAfterDeliveryComplete } from '@/lib/riderQueryInvalidation';
+import { removeActiveTrip } from '@/lib/activeTrips';
 import { connectSocket, getSocketInstance } from '@/lib/socketClient';
 import { ServerSocketEvents } from '@/lib/socketEvents';
 
@@ -107,8 +108,13 @@ export default function RiderPaymentCaptureScreen() {
   const completeMut = useMutation({
     mutationFn: () => completeDelivery(orderId!),
     onSuccess: () => {
-      if (orderId) invalidateAfterDeliveryComplete(qc, orderId);
-      router.replace('/(tabs)/orders');
+      if (orderId) {
+        removeActiveTrip(qc, orderId);
+        invalidateAfterDeliveryComplete(qc, orderId);
+      }
+      dialog.alert('Delivery completed', 'The order was delivered and completed successfully.', [
+        { text: 'OK', onPress: () => router.replace('/(tabs)/orders') },
+      ]);
     },
     onError: (e: Error) => {
       completingRef.current = false;
