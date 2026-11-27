@@ -73,3 +73,36 @@ const styles = StyleSheet.create({
   phoneRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: Spacing.two },
   phone: { fontSize: 14 },
 });
+
+type PickupSummaryProps = {
+  title: string;
+  names: string[];
+  addresses: string[];
+};
+
+/** One compact card for multi-shop orders: all shop names on one flowing line. */
+export function OrderPickupsSummaryBlock({ title, names, addresses }: PickupSummaryProps) {
+  const theme = useTheme();
+  const uniqueAddresses = [...new Set(addresses.filter(Boolean))];
+
+  return (
+    <View style={[styles.block, { backgroundColor: theme.backgroundElement, borderColor: theme.border }]}>
+      <View style={styles.header}>
+        <View style={[styles.iconWrap, { backgroundColor: theme.primarySoft }]}>
+          <Ionicons name="restaurant" size={18} color={theme.primary} />
+        </View>
+        <View style={styles.headerText}>
+          <ThemedText type="label" themeColor="textSecondary">
+            {title}
+          </ThemedText>
+          <ThemedText style={styles.name}>{names.join(' · ')}</ThemedText>
+        </View>
+      </View>
+      {uniqueAddresses.length ? (
+        <ThemedText type="small" themeColor="textSecondary" style={styles.address}>
+          {uniqueAddresses.join(' · ')}
+        </ThemedText>
+      ) : null}
+    </View>
+  );
+}

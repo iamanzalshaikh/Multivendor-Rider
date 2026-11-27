@@ -90,7 +90,7 @@ export const ActiveOrderCard = memo(function ActiveOrderCard({ order, busy, onAc
 
   const runPrimary = useCallback(async () => {
     if (!next) return;
-    // COD / Get Anything: record fee+cash and wait for customer confirm ? never skip.
+    // COD / Get Anything: record fee+cash and wait for customer confirm â€” never skip.
     if (next === 'complete' && (isCod || deferredFee)) {
       router.push(`/order/payment/${order._id}` as never);
       setSwipeKey((k) => k + 1);
@@ -223,15 +223,15 @@ export const ActiveOrderCard = memo(function ActiveOrderCard({ order, busy, onAc
         {isCod ? (
           <View style={[styles.codBadge, { backgroundColor: theme.primarySoft }]}>
             <ThemedText style={[styles.codText, { color: theme.primary }]}>
-              COD · Collect {payInUsd ? 'USD' : 'JMD'} cash
+              COD Â· Collect {payInUsd ? 'USD' : 'JMD'} cash
             </ThemedText>
           </View>
         ) : (
           <View style={[styles.codBadge, { backgroundColor: theme.partnerSoft }]}>
             <ThemedText style={[styles.codText, { color: theme.partner }]}>
               {pay === 'COLLECTED' || pay === 'APPROVED'
-                ? 'Bank · Settled'
-                : 'Bank · Verify after delivery'}
+                ? 'Bank Â· Settled'
+                : 'Bank Â· Verify after delivery'}
             </ThemedText>
           </View>
         )}

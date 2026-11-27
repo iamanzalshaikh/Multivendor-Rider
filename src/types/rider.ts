@@ -39,6 +39,7 @@ export type RiderUser = {
 export type RiderOrderItem = {
   id?: string;
   _id?: string;
+  itemType?: string;
   itemName: string;
   quantity: number;
   price?: number;

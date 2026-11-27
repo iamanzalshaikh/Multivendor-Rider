@@ -14,7 +14,9 @@ import { Ionicons } from '@expo/vector-icons';
 
 import { DeliveryProgressBar } from '@/components/DeliveryProgressBar';
 import { OrderChatButton } from '@/components/OrderChatButton';
-import { OrderLocationBlock } from '@/components/OrderLocationBlock';
+import { OrderLocationBlock, OrderPickupsSummaryBlock } from '@/components/OrderLocationBlock';
+import { PurchaseAmountModal, type PurchaseLine } from '@/components/PurchaseAmountModal';
+import type { RiderOrderItem } from '@/types/rider';
 import { SwipeToConfirm } from '@/components/SwipeToConfirm';
 import { ThemedText } from '@/components/themed-text';
 import {
@@ -52,6 +54,7 @@ import {
   markItemsPurchased,
   rejectOrder,
   reportItemsOutOfStock,
+  setPurchasedPrices,
   startOnTheWay,
 } from '@/services/riders';
 import { formatCashDue, formatJmd, formatOrderTotal, riderEarningForOrder } from '@/lib/money';
@@ -64,6 +67,20 @@ function resolveOrderId(raw: string | string[] | undefined): string | undefined 
   return Array.isArray(raw) ? raw[0] : raw;
 }
 
+/** Custom (Get Anything) lines that still need the rider's actual purchase amount. */
+function getAnythingLines(order: { items?: RiderOrderItem[]; orderItems?: RiderOrderItem[] } | undefined): PurchaseLine[] {
+  const list = order?.items ?? order?.orderItems ?? [];
+  return list
+    .filter((i) => i.itemType === 'CUSTOM_REQUEST')
+    .map((i) => ({
+      itemId: String(i.id ?? i._id ?? ''),
+      name: i.itemName,
+      quantity: i.quantity,
+      estimate: Number(i.price ?? 0) * Number(i.quantity || 1),
+    }))
+    .filter((l) => l.itemId);
+}
+
 export default function OrderDetailScreen() {
   const params = useLocalSearchParams<{ orderId: string }>();
   const orderId = resolveOrderId(params.orderId);
@@ -72,6 +89,8 @@ export default function OrderDetailScreen() {
   const qc = useQueryClient();
   const [swipeKey, setSwipeKey] = useState(0);
   const { pickEta, etaPickerModal } = useEtaPicker();
+  const [purchaseOpen, setPurchaseOpen] = useState(false);
+  const [purchaseSaving, setPurchaseSaving] = useState(false);
 
   const orderQ = useRiderOrderQuery(orderId);
   const [selectedOosIds, setSelectedOosIds] = useState<string[]>([]);
@@ -89,7 +108,7 @@ export default function OrderDetailScreen() {
       if (orderId) invalidateAfterOrderAction(qc, orderId);
       dialog.alert(
         'Customer notified',
-        'The customer was told these items are out of stock. You are released from this delivery ? they can cancel and place a new order.',
+        'The customer was told these items are out of stock. You are released from this delivery — they can cancel and place a new order.',
       );
       router.replace('/(tabs)/orders');
     },
@@ -160,6 +179,11 @@ export default function OrderDetailScreen() {
       | 'pickup'
       | 'start',
   ) {
+    // Get Anything: the customer's amount was an estimate — record what was really paid first.
+    if (action === 'processing' && getAnythingLines(order).length) {
+      setPurchaseOpen(true);
+      return;
+    }
     if (action === 'on_the_way' || action === 'start') {
       const eta = await pickEta();
       if (eta == null) {
@@ -257,6 +281,24 @@ export default function OrderDetailScreen() {
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: theme.background }]} edges={['top', 'bottom']}>
       {etaPickerModal}
+      <PurchaseAmountModal
+        visible={purchaseOpen}
+        lines={getAnythingLines(order)}
+        busy={purchaseSaving}
+        onCancel={() => setPurchaseOpen(false)}
+        onConfirm={async (prices) => {
+          setPurchaseSaving(true);
+          try {
+            await setPurchasedPrices(orderId!, prices);
+            setPurchaseOpen(false);
+            actionMut.mutate({ action: 'processing' });
+          } catch (e) {
+            dialog.alert('Could not save amount', e instanceof Error ? e.message : 'Try again');
+          } finally {
+            setPurchaseSaving(false);
+          }
+        }}
+      />
       <View style={[styles.nav, { borderBottomColor: theme.border }]}>
         <Pressable onPress={() => router.back()} style={styles.navBack} hitSlop={12}>
           <Ionicons name="arrow-back" size={22} color={theme.text} />
@@ -275,7 +317,13 @@ export default function OrderDetailScreen() {
           <DeliveryProgressBar status={order.orderStatus} />
         </View>
 
-        {pickups.length ? (
+        {pickups.length > 1 ? (
+          <OrderPickupsSummaryBlock
+            title={`Pickups · ${pickups.length} shops`}
+            names={pickups.map((p) => p.restaurantName || 'Store')}
+            addresses={pickups.map((p) => formatPickupAddress(p))}
+          />
+        ) : pickups.length ? (
           pickups.map((pickup, index) => (
             <OrderLocationBlock
               key={pickup._id || `pickup-${index}`}
@@ -491,8 +539,8 @@ export default function OrderDetailScreen() {
               <Ionicons name="card-outline" size={16} color={theme.partner} />
               <ThemedText style={[styles.codText, { color: theme.partner }]}>
                 {pay === 'COLLECTED' || pay === 'APPROVED'
-                  ? 'Bank � Settled � collect no cash'
-                  : 'Bank � Deliver now � payment verifies after delivery'}
+                  ? 'Bank · Settled — collect no cash'
+                  : 'Bank · Deliver now — payment verifies after delivery'}
               </ThemedText>
             </View>
           )}
@@ -530,7 +578,7 @@ export default function OrderDetailScreen() {
                     (order as { settlement?: { deliveryFeeDeferred?: boolean } }).settlement
                       ?.deliveryFeeDeferred,
                 );
-                // COD always, and Get Anything (any pay method) ? rider sets fee + customer confirms.
+                // COD always, and Get Anything (any pay method) — rider sets fee + customer confirms.
                 if (next === 'complete' && (order.paymentMethod === 'COD' || deferredFee)) {
                   router.push(`/order/payment/${orderId}` as never);
                   setSwipeKey((k) => k + 1);

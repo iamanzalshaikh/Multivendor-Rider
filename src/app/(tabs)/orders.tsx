@@ -281,7 +281,7 @@ export default function TripScreen() {
               </View>
             ) : activeOrders.length > 0 ? (
               <ThemedText type="small" themeColor="textSecondary" style={styles.batchHint}>
-                All trips aligned · {statusBreakdown(activeOrders)}
+                All trips aligned Â· {statusBreakdown(activeOrders)}
               </ThemedText>
             ) : null}
             <SwipeToConfirm

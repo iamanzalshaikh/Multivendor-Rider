@@ -27,7 +27,7 @@ import { orderDisplayId } from '@/lib/orderDisplay';
 import type { RiderOrder } from '@/types/rider';
 
 function formatDate(value?: string) {
-  if (!value) return '—';
+  if (!value) return 'â€”';
   return new Date(value).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
 }
 
@@ -95,7 +95,7 @@ const PastShiftRow = memo(function PastShiftRow({
       <View style={{ flex: 1, marginHorizontal: 12 }}>
         <ThemedText style={{ fontFamily: Fonts.semiBold, fontSize: 15 }}>Shift on {dateStr}</ThemedText>
         <ThemedText type="small" themeColor="textSecondary">
-          {shift.deliveriesCompleted} trips · {formatJmd((shift.deliveryFeesCollected ?? 0) + (shift.tipsReceived ?? 0))} earned
+          {shift.deliveriesCompleted} trips Â· {formatJmd((shift.deliveryFeesCollected ?? 0) + (shift.tipsReceived ?? 0))} earned
         </ThemedText>
       </View>
       <Ionicons name="chevron-forward" size={16} color={theme.textSecondary} />
@@ -137,7 +137,7 @@ export default function EarningsScreen() {
   if (earningsQ.isLoading && summaryQ.isLoading && !earningsQ.data && !summaryQ.data) {
     return (
       <View style={[styles.root, { backgroundColor: theme.background }]}>
-        <ScreenHeader title="Earnings" subtitle="Loading…" />
+        <ScreenHeader title="Earnings" subtitle="Loadingâ€¦" />
         <RiderEarningsSkeleton />
       </View>
     );

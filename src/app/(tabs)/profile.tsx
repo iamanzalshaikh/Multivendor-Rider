@@ -197,7 +197,7 @@ export default function ProfileScreen() {
             )}
             <ThemedText style={styles.name}>{user?.fullName ?? data?.riderCode ?? 'Partner'}</ThemedText>
             <ThemedText type="small" themeColor="textSecondary">
-              {data?.riderCode} · {user?.email ?? ''}
+              {data?.riderCode} Â· {user?.email ?? ''}
             </ThemedText>
             <View style={styles.chipRow}>
               <StatusChip
@@ -219,7 +219,7 @@ export default function ProfileScreen() {
             <InfoRow label="Mobile" value={user?.mobile ?? 'N/A'} icon="call-outline" />
             <InfoRow
               label="Vehicle"
-              value={`${(data?.vehicleType ?? 'bike').toUpperCase()}${data?.vehicleNumber ? ` · ${data.vehicleNumber}` : ''}`}
+              value={`${(data?.vehicleType ?? 'bike').toUpperCase()}${data?.vehicleNumber ? ` Â· ${data.vehicleNumber}` : ''}`}
               icon="bicycle-outline"
             />
             <InfoRow

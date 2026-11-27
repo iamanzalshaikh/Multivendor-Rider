@@ -57,8 +57,12 @@ export default function RiderPaymentCaptureScreen() {
   const baseCashDue = useMemo(() => {
     if (!order) return 0;
     if (deferredFee && !isCod) {
-      // Bank / prepaid Get Anything — customer only confirms the rider delivery fee.
-      return 0;
+      // Prepaid Get Anything — the customer pays the rider delivery fee, plus any amount
+      // the goods cost over the agreed budget (recorded at purchase).
+      return Number(
+        (order as { settlement?: { getAnything?: { extraDueFromCustomer?: number } } }).settlement
+          ?.getAnything?.extraDueFromCustomer ?? 0,
+      );
     }
     if (payInUsd) {
       return Number(
@@ -117,7 +121,7 @@ export default function RiderPaymentCaptureScreen() {
     completingRef.current = true;
     setWaitingConfirm(false);
     if (source === 'check' || source === 'resume') {
-      dialog.alert('Confirmed', 'Customer confirmed ? completing delivery.');
+      dialog.alert('Confirmed', 'Customer confirmed — completing delivery.');
     }
     completeMut.mutate();
   }
@@ -190,7 +194,7 @@ export default function RiderPaymentCaptureScreen() {
         if (!alive) return;
         sock.on(ServerSocketEvents.CASH_SESSION_CONFIRMED, handler);
       } catch {
-        /* offline ? rider can tap Check if confirmed */
+        /* offline — rider can tap Check if confirmed */
       }
     })();
 
@@ -235,7 +239,7 @@ export default function RiderPaymentCaptureScreen() {
         const msg = err instanceof Error ? err.message : '';
         const lower = msg.toLowerCase();
 
-        // Already pending ? resume instead of failing / false offline queue.
+        // Already pending — resume instead of failing / false offline queue.
         if (
           status === 409 ||
           lower.includes('already pending') ||
@@ -250,7 +254,7 @@ export default function RiderPaymentCaptureScreen() {
           }
         }
 
-        // Only true network failures go offline ? not "Request failed (500)".
+        // Only true network failures go offline — not "Request failed (500)".
         const isNetwork =
           status == null &&
           (lower.includes('network') ||
@@ -523,14 +527,14 @@ export default function RiderPaymentCaptureScreen() {
           <View style={[styles.hint, { backgroundColor: theme.partnerSoft }]}>
             <Ionicons name="add-circle-outline" size={18} color={theme.partner} />
             <ThemedText style={[styles.hintText, { color: theme.partner }]}>
-              Overpay {fmt(walletDeltaDisplay)} ? customer wallet credit (after they confirm)
+              Overpay {fmt(walletDeltaDisplay)} → customer wallet credit (after they confirm)
             </ThemedText>
           </View>
         ) : walletDeltaDisplay < 0 ? (
           <View style={[styles.hint, { backgroundColor: dangerSoft }]}>
             <Ionicons name="remove-circle-outline" size={18} color={theme.danger} />
             <ThemedText style={[styles.hintText, { color: theme.danger }]}>
-              Short {fmt(Math.abs(walletDeltaDisplay))} ? customer wallet debit (after they confirm)
+              Short {fmt(Math.abs(walletDeltaDisplay))} → customer wallet debit (after they confirm)
             </ThemedText>
           </View>
         ) : null}

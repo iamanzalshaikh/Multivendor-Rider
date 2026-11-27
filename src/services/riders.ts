@@ -522,3 +522,15 @@ export async function fetchMyRiderReviews() {
   >('/riders/me/reviews');
   return body.data!;
 }
+
+/** Get Anything: record what the rider actually paid per custom item (before "items bought"). */
+export async function setPurchasedPrices(
+  orderId: string,
+  items: Array<{ itemId: string; purchasedPrice: number }>,
+) {
+  const body = await apiFetch<ApiEnvelope<RiderOrder>>(`/riders/case/orders/${orderId}/purchase`, {
+    method: 'POST',
+    body: JSON.stringify({ items }),
+  });
+  return asRiderOrder(body.data, orderId);
+}

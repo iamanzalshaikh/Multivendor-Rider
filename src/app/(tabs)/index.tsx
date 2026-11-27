@@ -185,7 +185,7 @@ export default function HomeScreen() {
   if (homeLoading && !currentRider) {
     return (
       <View style={[styles.root, { backgroundColor: theme.background }]}>
-        <ScreenHeader title="Partner" subtitle="Loading your dashboard…" />
+        <ScreenHeader title="Partner" subtitle="Loading your dashboardâ€¦" />
         <RiderHomeSkeleton />
       </View>
     );

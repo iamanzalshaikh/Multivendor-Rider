@@ -174,7 +174,7 @@ export default function LogPurchaseScreen() {
                 label="Note (optional)"
                 value={note}
                 onChangeText={setNote}
-                placeholder="Shell petrol — bike"
+                placeholder="Shell petrol â€” bike"
               />
 
               <Pressable
