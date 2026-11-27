@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { dialog } from '@/lib/dialog';
+import { addActiveTrip, removeActiveTrip } from '@/lib/activeTrips';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -156,13 +157,15 @@ export default function OrderDetailScreen() {
     },
     onMutate: async ({ action }) => {
       if (!orderId) return;
+      if (action === 'accept') addActiveTrip(qc, orderId);
       const nextStatus = optimisticStatusForAction(action);
       if (!nextStatus) return;
       await qc.cancelQueries({ queryKey: riderKeys.order(orderId) });
       const prev = patchOrderStatusOptimistic(qc, orderId, nextStatus);
       return { prev };
     },
-    onError: (e, _vars, ctx) => {
+    onError: (e, vars, ctx) => {
+      if (orderId && vars.action === 'accept') removeActiveTrip(qc, orderId);
       if (orderId && ctx?.prev) {
         qc.setQueryData(riderKeys.order(orderId), ctx.prev);
       }
@@ -171,13 +174,15 @@ export default function OrderDetailScreen() {
     onSuccess: (_, { action }) => {
       if (!orderId) return;
       if (action === 'complete') {
+        removeActiveTrip(qc, orderId);
         invalidateAfterDeliveryComplete(qc, orderId);
-      } else {
-        invalidateAfterOrderAction(qc, orderId);
+        dialog.alert('Delivery completed', 'The order was delivered and completed successfully.', [
+          { text: 'OK', onPress: () => router.replace('/(tabs)/orders') },
+        ]);
+        return;
       }
-      if (action === 'accept' || action === 'complete' || action === 'reject') {
-        router.replace('/(tabs)/orders');
-      }
+      invalidateAfterOrderAction(qc, orderId);
+      if (action === 'reject') router.replace('/(tabs)/orders');
     },
   });
 
@@ -207,6 +212,8 @@ export default function OrderDetailScreen() {
       return;
     }
     actionMut.mutate({ action });
+    // Accepting opens the trip right away; the server confirms in the background.
+    if (action === 'accept') router.replace('/(tabs)/orders');
   }
 
   if (!orderId) {
