@@ -1,21 +1,20 @@
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueries, useQueryClient } from '@tanstack/react-query';
 import {
   View,
   StyleSheet,
   RefreshControl,
   Pressable,
-  Modal,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { dialog } from '@/lib/dialog';
 import { Ionicons } from '@expo/vector-icons';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 
 import { toast } from '@/lib/toast';
 
-
 import { ActiveOrderCard } from '@/components/ActiveOrderCard';
 import { ActiveTripsSummaryTable } from '@/components/ActiveTripsSummaryTable';
+import { BatchUpdateModal } from '@/components/BatchUpdateModal';
 import { ScreenHeader } from '@/components/screen-header';
 import { RiderTripSkeleton } from '@/components/skeleton';
 import { SwipeToConfirm } from '@/components/SwipeToConfirm';
@@ -41,14 +40,19 @@ import {
   rejectOrder,
   startOnTheWay,
   batchUpdateCaseOrderStatuses,
+  fetchOrderById,
 } from '@/services/riders';
 import { DEFAULT_ETA_MINUTES } from '@/constants/deliveryStatus';
 import { useEtaPicker } from '@/hooks/use-eta-picker';
+import {
+  batchMismatchReason,
+  statusBreakdown,
+  type BatchTargetStatus,
+} from '@/lib/batchUpdate';
 import type { RiderOrder } from '@/types/rider';
 
 function ActiveTripItem({ orderId }: { orderId: string }) {
   const qc = useQueryClient();
-  const { activeOrderIds } = useRiderProfile();
   const activeOrderQ = useRiderOrderCache(orderId);
   useClearStaleActiveTrip(orderId, activeOrderQ.data?.orderStatus);
 
@@ -133,6 +137,7 @@ export default function TripScreen() {
   const tabBarHeight = useTabBarHeight();
   const [refreshing, setRefreshing] = useState(false);
   const [showBatchModal, setShowBatchModal] = useState(false);
+  const [swipeKey, setSwipeKey] = useState(0);
   const { pickEta, etaPickerModal } = useEtaPicker();
 
   const {
@@ -143,28 +148,54 @@ export default function TripScreen() {
     isLoading: profileLoading,
   } = useRiderProfile();
 
+  const activeOrderQueries = useQueries({
+    queries: activeOrderIds.map((id) => ({
+      queryKey: riderKeys.order(id),
+      queryFn: () => fetchOrderById(id),
+      staleTime: 10_000,
+      enabled: Boolean(id),
+    })),
+  });
+
+  const activeOrders = useMemo(() => {
+    return activeOrderQueries
+      .map((q) => q.data)
+      .filter((o): o is RiderOrder => Boolean(o));
+  }, [activeOrderQueries]);
+
+  const mismatchReason = useMemo(() => batchMismatchReason(activeOrders), [activeOrders]);
+
   const batchUpdateMut = useMutation({
-    mutationFn: ({ status, etaMinutes }: { status: string; etaMinutes?: number }) =>
-      batchUpdateCaseOrderStatuses(status, etaMinutes),
-    onSuccess: () => {
-      toast.success('Successfully updated all active deliveries.');
+    mutationFn: async (input: {
+      status: BatchTargetStatus;
+      orderIds: string[];
+      etaMinutes?: number;
+    }) => batchUpdateCaseOrderStatuses(input),
+    onSuccess: (result, vars) => {
+      const updated = result.updatedCount ?? result.updated?.length ?? vars.orderIds.length;
+      const failed = result.failed?.length ?? 0;
+      if (failed > 0) {
+        toast.success(`Updated ${updated}. ${failed} could not move with this batch.`);
+      } else {
+        toast.success(`Updated ${updated} deliveries.`);
+      }
       setShowBatchModal(false);
+      setSwipeKey((k) => k + 1);
       activeOrderIds.forEach((id) => {
-        qc.invalidateQueries({ queryKey: riderKeys.order(id) });
+        void qc.invalidateQueries({ queryKey: riderKeys.order(id) });
       });
+      void refetchProfile();
     },
     onError: (e) => {
-      toast.error(e instanceof Error ? e.message : 'Try again', 'Update Failed');
-    },
-    onSettled: () => {
-      setShowBatchModal(false);
+      toast.error(e instanceof Error ? e.message : 'Try again', 'Batch update failed');
+      setSwipeKey((k) => k + 1);
     },
   });
 
   if (profileLoading && !rider) {
     return (
       <View style={[styles.root, { backgroundColor: theme.background }]}>
-        <ScreenHeader title="Active trips" subtitle="Loading…" />
+        <ScreenHeader title="Active trips" subtitle="Loading?" />
         <RiderTripSkeleton />
       </View>
     );
@@ -224,8 +255,8 @@ export default function TripScreen() {
               setRefreshing(true);
               try {
                 await Promise.all([
-                  ...activeOrderIds.map(id => qc.refetchQueries({ queryKey: riderKeys.order(id) })),
-                  refetchProfile()
+                  ...activeOrderIds.map((id) => qc.refetchQueries({ queryKey: riderKeys.order(id) })),
+                  refetchProfile(),
                 ]);
               } finally {
                 setRefreshing(false);
@@ -235,36 +266,54 @@ export default function TripScreen() {
         }>
         <ActiveTripsSummaryTable orderIds={activeOrderIds} />
 
-        {activeOrderIds.map(id => (
+        {activeOrderIds.map((id) => (
           <ActiveTripItem key={id} orderId={id} />
         ))}
 
         {activeOrderIds.length > 1 && (
           <View style={styles.batchSwipeWrap}>
+            {mismatchReason ? (
+              <View style={[styles.reasonBanner, { backgroundColor: theme.primarySoft }]}>
+                <Ionicons name="information-circle" size={18} color={theme.primary} />
+                <ThemedText style={[styles.reasonText, { color: theme.primary }]}>
+                  {mismatchReason}
+                </ThemedText>
+              </View>
+            ) : activeOrders.length > 0 ? (
+              <ThemedText type="small" themeColor="textSecondary" style={styles.batchHint}>
+                All trips aligned Â· {statusBreakdown(activeOrders)}
+              </ThemedText>
+            ) : null}
             <SwipeToConfirm
+              key={`batch-swipe-${swipeKey}`}
               label="Swipe to Batch Update"
               busy={batchUpdateMut.isPending}
               disabled={batchUpdateMut.isPending}
               onConfirm={() => {
-                const orders = activeOrderIds.map(id => qc.getQueryData<RiderOrder>(riderKeys.order(id))).filter(Boolean);
-                
+                const orders = activeOrderIds
+                  .map((id) => qc.getQueryData<RiderOrder>(riderKeys.order(id)))
+                  .filter((o): o is RiderOrder => Boolean(o));
+
                 if (orders.length === 0 && activeOrderIds.length > 0) {
-                  toast.info('Loading orders, please wait...');
+                  toast.info('Loading orders, please wait?');
+                  setSwipeKey((k) => k + 1);
                   return;
                 }
 
-                const allArrived = orders.every(o => {
-                  const s = String(o?.orderStatus).toUpperCase();
+                const allTerminal = orders.every((o) => {
+                  const s = String(o.orderStatus).toUpperCase();
                   return s === 'ARRIVED' || s === 'DELIVERED' || s === 'COMPLETED';
                 });
-                
-                if (allArrived) {
+
+                if (allTerminal) {
                   dialog.alert(
-                    'Batch Update Complete',
-                    'All active orders have already arrived. Please confirm delivery individually at each customer location.'
+                    'Finish deliveries one by one',
+                    'Every active trip is already arrived (or done). Confirm each delivery individually at the customer.',
                   );
+                  setSwipeKey((k) => k + 1);
                   return;
                 }
+
                 setShowBatchModal(true);
               }}
             />
@@ -272,42 +321,28 @@ export default function TripScreen() {
         )}
       </TabScrollView>
 
-      <Modal visible={showBatchModal} transparent animationType="fade" onRequestClose={() => setShowBatchModal(false)}>
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, { backgroundColor: theme.backgroundElement }]}>
-            <ThemedText style={styles.modalTitle}>Batch Update Orders</ThemedText>
-            <ThemedText type="small" themeColor="textSecondary" style={{ marginBottom: Spacing.four, textAlign: 'center' }}>
-              Select the new status to apply to ALL your active deliveries.
-            </ThemedText>
-            <View style={{ width: '100%', gap: Spacing.two, marginBottom: Spacing.four }}>
-              {['PROCESSING', 'ON_THE_WAY', 'ARRIVED'].map((status) => (
-                <Pressable
-                  key={status}
-                  style={[styles.modalButton, styles.modalButtonCancel, { borderColor: theme.border, marginBottom: 8 }]}
-                  onPress={async () => {
-                    if (status === 'ON_THE_WAY') {
-                      setShowBatchModal(false);
-                      const eta = await pickEta();
-                      if (eta == null) return;
-                      batchUpdateMut.mutate({ status, etaMinutes: eta });
-                      return;
-                    }
-                    batchUpdateMut.mutate({ status });
-                  }}>
-                  <ThemedText style={{ fontFamily: Fonts.bold }}>
-                    {status === 'PROCESSING' ? 'Processing' : status.replace(/_/g, ' ')}
-                  </ThemedText>
-                </Pressable>
-              ))}
-            </View>
-            <Pressable
-              style={[styles.modalButton, { backgroundColor: theme.primary }]}
-              onPress={() => setShowBatchModal(false)}>
-              <ThemedText style={{ color: '#fff', fontFamily: Fonts.bold }}>Cancel</ThemedText>
-            </Pressable>
-          </View>
-        </View>
-      </Modal>
+      <BatchUpdateModal
+        visible={showBatchModal}
+        orders={activeOrders}
+        busy={batchUpdateMut.isPending}
+        onClose={() => {
+          setShowBatchModal(false);
+          setSwipeKey((k) => k + 1);
+        }}
+        onConfirm={async ({ status, orderIds }) => {
+          if (status === 'ON_THE_WAY') {
+            setShowBatchModal(false);
+            const eta = await pickEta();
+            if (eta == null) {
+              setSwipeKey((k) => k + 1);
+              return;
+            }
+            batchUpdateMut.mutate({ status, orderIds, etaMinutes: eta });
+            return;
+          }
+          batchUpdateMut.mutate({ status, orderIds });
+        }}
+      />
       {etaPickerModal}
     </View>
   );
@@ -350,35 +385,14 @@ const styles = StyleSheet.create({
     marginHorizontal: Layout.screenPadding,
     marginTop: Spacing.two,
     marginBottom: Spacing.five,
+    gap: Spacing.two,
   },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: Spacing.four,
-  },
-  modalContent: {
-    width: '100%',
-    maxWidth: 400,
-    borderRadius: 16,
-    padding: Spacing.four,
-    alignItems: 'center',
-  },
-  modalTitle: {
-    fontSize: 20,
-    fontFamily: Fonts.extraBold,
-    marginBottom: Spacing.two,
-  },
-  modalButton: {
-    width: '100%',
-    paddingVertical: 14,
+  reasonBanner: {
+    flexDirection: 'row',
+    gap: 8,
     borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
+    padding: 12,
   },
-  modalButtonCancel: {
-    backgroundColor: 'transparent',
-    borderWidth: 1,
-  },
+  reasonText: { flex: 1, fontSize: 12, fontFamily: Fonts.medium, lineHeight: 17 },
+  batchHint: { marginBottom: 4 },
 });

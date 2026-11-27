@@ -1,10 +1,11 @@
 import 'react-native-gesture-handler';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
-import { DefaultTheme, ThemeProvider, Stack } from 'expo-router';
+import { DarkTheme, DefaultTheme, ThemeProvider, Stack } from 'expo-router';
 import { useEffect } from 'react';
-import { StyleSheet, View, useColorScheme } from 'react-native';
+import { StyleSheet, View, useColorScheme as useDeviceColorScheme } from 'react-native';
 import { useFonts } from 'expo-font';
+import { Ionicons } from '@expo/vector-icons';
 import * as SplashScreen from 'expo-splash-screen';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -16,16 +17,37 @@ import {
   PlusJakartaSans_800ExtraBold,
 } from '@expo-google-fonts/plus-jakarta-sans';
 
-import { Brand } from '@/constants/theme';
+import { Colors } from '@/constants/theme';
+import { ThemeProviderCustom, useThemeContext } from '@/context/ThemeContext';
 import { queryClient } from '@/lib/queryClient';
 import { ToastHost } from '@/components/toast-host';
 import { DialogHost } from '@/components/dialog-host';
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
+function RootNavigator() {
+  const { activeScheme, colors } = useThemeContext();
+
+  return (
+    <ThemeProvider value={activeScheme === 'dark' ? DarkTheme : DefaultTheme}>
+      <Stack
+        screenOptions={{
+          headerShown: false,
+          animation: 'fade',
+          animationDuration: 180,
+          contentStyle: { backgroundColor: colors.background },
+        }}
+      />
+      <ToastHost />
+      <DialogHost />
+    </ThemeProvider>
+  );
+}
+
 export default function RootLayout() {
-  const scheme = useColorScheme();
+  const deviceScheme = useDeviceColorScheme();
   const [fontsLoaded, fontError] = useFonts({
+    ...Ionicons.font,
     PlusJakartaSans_400Regular,
     PlusJakartaSans_500Medium,
     PlusJakartaSans_600SemiBold,
@@ -45,7 +67,12 @@ export default function RootLayout() {
   if (!fontsReady) {
     return (
       <GestureHandlerRootView style={styles.root}>
-        <View style={[styles.root, { backgroundColor: scheme === 'dark' ? '#000000' : '#FFFFFF' }]} />
+        <View
+          style={[
+            styles.root,
+            { backgroundColor: deviceScheme === 'dark' ? Colors.dark.background : Colors.light.background },
+          ]}
+        />
       </GestureHandlerRootView>
     );
   }
@@ -54,18 +81,9 @@ export default function RootLayout() {
     <GestureHandlerRootView style={styles.root}>
       <SafeAreaProvider>
         <QueryClientProvider client={queryClient}>
-          <ThemeProvider value={DefaultTheme}>
-            <Stack
-              screenOptions={{
-                headerShown: false,
-                animation: 'fade',
-                animationDuration: 180,
-                contentStyle: { backgroundColor: Brand.surface },
-              }}
-            />
-            <ToastHost />
-            <DialogHost />
-          </ThemeProvider>
+          <ThemeProviderCustom>
+            <RootNavigator />
+          </ThemeProviderCustom>
         </QueryClientProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>

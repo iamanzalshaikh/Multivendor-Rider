@@ -2,10 +2,10 @@ import { View, StyleSheet, FlatList, ActivityIndicator, Pressable, Text } from '
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { memo, useMemo } from 'react';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ScreenHeader } from '@/components/screen-header';
 import { ThemedText } from '@/components/themed-text';
-import { Layout } from '@/constants/layout';
 import { Fonts, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { usePastShiftsQuery } from '@/hooks/queries/rider';
@@ -75,6 +75,7 @@ const PastShiftCard = memo(function PastShiftCard({
 export default function AllShiftHistoryScreen() {
   const theme = useTheme();
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const pastShiftsQ = usePastShiftsQuery(true);
 
   const { totalShifts, lifetimeEarnings } = useMemo(() => {
@@ -91,7 +92,7 @@ export default function AllShiftHistoryScreen() {
 
   return (
     <View style={[styles.root, { backgroundColor: theme.background }]}>
-      <ScreenHeader title="Shift History" showBack />
+      <ScreenHeader title="Shift History" />
       
       {pastShiftsQ.isLoading ? (
         <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
@@ -101,7 +102,7 @@ export default function AllShiftHistoryScreen() {
         <FlatList
           data={pastShiftsQ.data}
           keyExtractor={(item) => item.id}
-          contentContainerStyle={styles.list}
+          contentContainerStyle={[styles.list, { paddingBottom: insets.bottom + 40 }]}
           ListHeaderComponent={
             <View style={[styles.summaryHeader, { backgroundColor: theme.backgroundElement, borderColor: theme.border, borderWidth: 1 }]}>
               <View style={styles.summaryBox}>
@@ -151,7 +152,6 @@ const styles = StyleSheet.create({
   },
   list: {
     padding: Spacing.four,
-    paddingBottom: Layout.safeAreaBottom + 40,
     gap: Spacing.three,
   },
   summaryHeader: {

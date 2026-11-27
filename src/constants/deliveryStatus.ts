@@ -65,6 +65,7 @@ export const RIDER_STATUS_LABELS: Record<string, string> = {
   DELIVERED: 'Delivered',
   COMPLETED: 'Delivered',
   CANCELLED: 'Cancelled',
+  PARTIAL_PENDING_CUSTOMER: 'Waiting on customer — item out of stock',
 };
 
 export type DeliveryStep = {
@@ -136,11 +137,21 @@ export const ETA_MAX_MINUTES = 60;
  * Arrived → Complete
  */
 export function nextRiderAction(status: string): RiderDeliveryAction | null {
+  if (status === 'PARTIAL_PENDING_CUSTOMER') return null;
   if (PRE_PURCHASE_STATUSES.includes(status)) return 'processing';
   if (status === 'PROCESSING' || status === 'PICKED_UP') return 'on_the_way';
   if (status === 'ON_THE_WAY') return 'arrived';
   if (status === 'ARRIVED') return 'complete';
   return null;
+}
+
+/** Rider can report OOS only before items are purchased. */
+export function canReportOutOfStock(order: {
+  orderStatus: string;
+  riderId?: unknown;
+}): boolean {
+  if (!order.riderId) return false;
+  return PRE_PURCHASE_STATUSES.includes(order.orderStatus);
 }
 
 /** Always allow complete — bank verification is async after delivery. */

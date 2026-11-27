@@ -8,7 +8,7 @@ import {
   ActivityIndicator,
   Platform,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { memo, useCallback } from 'react';
@@ -102,6 +102,7 @@ const NotificationCard = memo(function NotificationCard({
 export default function NotificationsScreen() {
   const theme = useTheme();
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const qc = useQueryClient();
 
   const listQ = useQuery({
@@ -179,7 +180,11 @@ export default function NotificationsScreen() {
           refreshControl={
             <RefreshControl refreshing={listQ.isRefetching} onRefresh={() => listQ.refetch()} />
           }
-          contentContainerStyle={[styles.listContainer, notifications.length === 0 && styles.emptyWrap]}
+          contentContainerStyle={[
+            styles.listContainer,
+            { paddingBottom: insets.bottom + 20 },
+            notifications.length === 0 && styles.emptyWrap,
+          ]}
           ListEmptyComponent={
             <View style={[styles.empty, { backgroundColor: theme.backgroundElement }]}>
               <View style={styles.emptyIconWrap}>
@@ -217,7 +222,6 @@ const styles = StyleSheet.create({
   },
   listContainer: {
     paddingHorizontal: Layout.screenPadding,
-    paddingBottom: Layout.safeAreaBottom + 20,
     gap: Spacing.three,
   },
   card: {

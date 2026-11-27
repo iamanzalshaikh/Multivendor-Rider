@@ -13,12 +13,15 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 
 import { DeliveryProgressBar } from '@/components/DeliveryProgressBar';
-import { DeliveryMap } from '@/components/delivery-map';
-import { OrderLocationBlock } from '@/components/OrderLocationBlock';
+import { OrderChatButton } from '@/components/OrderChatButton';
+import { OrderLocationBlock, OrderPickupsSummaryBlock } from '@/components/OrderLocationBlock';
+import { PurchaseAmountModal, type PurchaseLine } from '@/components/PurchaseAmountModal';
+import type { RiderOrderItem } from '@/types/rider';
 import { SwipeToConfirm } from '@/components/SwipeToConfirm';
 import { ThemedText } from '@/components/themed-text';
 import {
   actionButtonLabel,
+  canReportOutOfStock,
   isClaimableOrder,
   nextRiderAction,
   RIDER_STATUS_LABELS,
@@ -27,17 +30,14 @@ import { cardStyle, Layout } from '@/constants/layout';
 import { Fonts, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { useOrderLocationPing } from '@/hooks/use-order-location-ping';
-import { useRiderGps } from '@/hooks/use-rider-gps';
 import {
   formatDeliveryAddress,
-  formatRestaurantAddress,
+  formatPickupAddress,
+  formatPickupNames,
   itemCount,
   orderDisplayId,
-  pickCustomerCoord,
-  pickRestaurantCoord,
-  pickRiderCoord,
+  orderPickups,
 } from '@/lib/orderDisplay';
-import { useOrderRoutePath } from '@/hooks/use-order-route-path';
 import { useRiderOrderQuery } from '@/hooks/queries/rider';
 import {
   invalidateAfterDeliveryComplete,
@@ -53,6 +53,8 @@ import {
   markArrived,
   markItemsPurchased,
   rejectOrder,
+  reportItemsOutOfStock,
+  setPurchasedPrices,
   startOnTheWay,
 } from '@/services/riders';
 import { formatCashDue, formatJmd, formatOrderTotal, riderEarningForOrder } from '@/lib/money';
@@ -65,6 +67,20 @@ function resolveOrderId(raw: string | string[] | undefined): string | undefined 
   return Array.isArray(raw) ? raw[0] : raw;
 }
 
+/** Custom (Get Anything) lines that still need the rider's actual purchase amount. */
+function getAnythingLines(order: { items?: RiderOrderItem[]; orderItems?: RiderOrderItem[] } | undefined): PurchaseLine[] {
+  const list = order?.items ?? order?.orderItems ?? [];
+  return list
+    .filter((i) => i.itemType === 'CUSTOM_REQUEST')
+    .map((i) => ({
+      itemId: String(i.id ?? i._id ?? ''),
+      name: i.itemName,
+      quantity: i.quantity,
+      estimate: Number(i.price ?? 0) * Number(i.quantity || 1),
+    }))
+    .filter((l) => l.itemId);
+}
+
 export default function OrderDetailScreen() {
   const params = useLocalSearchParams<{ orderId: string }>();
   const orderId = resolveOrderId(params.orderId);
@@ -73,31 +89,32 @@ export default function OrderDetailScreen() {
   const qc = useQueryClient();
   const [swipeKey, setSwipeKey] = useState(0);
   const { pickEta, etaPickerModal } = useEtaPicker();
+  const [purchaseOpen, setPurchaseOpen] = useState(false);
+  const [purchaseSaving, setPurchaseSaving] = useState(false);
 
   const orderQ = useRiderOrderQuery(orderId);
+  const [selectedOosIds, setSelectedOosIds] = useState<string[]>([]);
 
   useOrderLocationPing(orderQ.data?.orderStatus);
 
-  const isActiveTrip = Boolean(
-    orderQ.data?.orderStatus &&
-      ['RIDER_ASSIGNED', 'PROCESSING', 'PICKED_UP', 'ON_THE_WAY', 'ARRIVED', 'READY_FOR_PICKUP'].includes(orderQ.data.orderStatus),
-  );
-  const riderGps = useRiderGps(isActiveTrip);
-  const orderDetail = orderQ.data;
-  const restaurantCoord = orderDetail ? pickRestaurantCoord(orderDetail) : null;
-  const customerCoord = orderDetail ? pickCustomerCoord(orderDetail) : null;
-  const riderCoord = pickRiderCoord(
-    riderGps ? { latitude: riderGps.latitude, longitude: riderGps.longitude } : null,
-    orderDetail,
-  );
-
-  const routeQ = useOrderRoutePath({
-    orderId,
-    orderStatus: orderDetail?.orderStatus,
-    restaurant: restaurantCoord,
-    customer: customerCoord,
-    rider: riderCoord,
-    enabled: Boolean(orderDetail),
+  const oosMut = useMutation({
+    mutationFn: async () => {
+      if (!orderId) throw new Error('Missing order');
+      if (!selectedOosIds.length) throw new Error('Select at least one item');
+      return reportItemsOutOfStock(orderId, selectedOosIds, 'Out of stock');
+    },
+    onSuccess: () => {
+      setSelectedOosIds([]);
+      if (orderId) invalidateAfterOrderAction(qc, orderId);
+      dialog.alert(
+        'Customer notified',
+        'The customer was told these items are out of stock. You are released from this delivery — they can cancel and place a new order.',
+      );
+      router.replace('/(tabs)/orders');
+    },
+    onError: (e) => {
+      dialog.alert('Failed', e instanceof Error ? e.message : 'Try again');
+    },
   });
 
   const actionMut = useMutation({
@@ -162,6 +179,11 @@ export default function OrderDetailScreen() {
       | 'pickup'
       | 'start',
   ) {
+    // Get Anything: the customer's amount was an estimate — record what was really paid first.
+    if (action === 'processing' && getAnythingLines(order).length) {
+      setPurchaseOpen(true);
+      return;
+    }
     if (action === 'on_the_way' || action === 'start') {
       const eta = await pickEta();
       if (eta == null) {
@@ -211,22 +233,72 @@ export default function OrderDetailScreen() {
   }
 
   const order = orderQ.data;
-  const restaurantName =
-    typeof order.restaurantId === 'object' ? order.restaurantId?.restaurantName ?? 'Restaurant' : 'Restaurant';
-  const restaurantPhone =
-    typeof order.restaurantId === 'object'
-      ? (order.restaurantId as { phone?: string })?.phone
-      : undefined;
+  const pickups = orderPickups(order);
   const customer = typeof order.customerId === 'object' ? order.customerId : undefined;
   const isAvailable = isClaimableOrder(order);
   const next = isAvailable ? null : nextRiderAction(order.orderStatus);
   const pay = String(order.paymentStatus ?? '').toUpperCase();
   const items = order.items ?? order.orderItems ?? [];
   const count = itemCount(order);
+  const customerNote = String(order.generalNote || order.notes || '').trim();
+  const chatEnabled = Boolean(order.riderId) || !isAvailable;
+  const showOosReport = canReportOutOfStock(order);
+  const awaitingCustomer =
+    order.orderStatus === 'PARTIAL_PENDING_CUSTOMER' || Boolean(order.awaitingCustomerDecision);
+
+  function toggleOosItem(id: string) {
+    setSelectedOosIds((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
+    );
+  }
+
+  function confirmReportOos() {
+    if (!selectedOosIds.length) {
+      dialog.alert('Select items', 'Tap the items that ran out of stock, then report.');
+      return;
+    }
+    const names = items
+      .filter((it) => {
+        const id = String(it.id ?? it._id ?? '');
+        return id && selectedOosIds.includes(id);
+      })
+      .map((it) => it.itemName)
+      .join(', ');
+    dialog.alert(
+      'Report out of stock?',
+      `Tell the customer that ${names || 'selected items'} ran out of stock. They can cancel and place a new order.`,
+      [
+        { text: 'Back', style: 'cancel' },
+        {
+          text: 'Notify customer',
+          style: 'destructive',
+          onPress: () => oosMut.mutate(),
+        },
+      ],
+    );
+  }
 
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: theme.background }]} edges={['top', 'bottom']}>
       {etaPickerModal}
+      <PurchaseAmountModal
+        visible={purchaseOpen}
+        lines={getAnythingLines(order)}
+        busy={purchaseSaving}
+        onCancel={() => setPurchaseOpen(false)}
+        onConfirm={async (prices) => {
+          setPurchaseSaving(true);
+          try {
+            await setPurchasedPrices(orderId!, prices);
+            setPurchaseOpen(false);
+            actionMut.mutate({ action: 'processing' });
+          } catch (e) {
+            dialog.alert('Could not save amount', e instanceof Error ? e.message : 'Try again');
+          } finally {
+            setPurchaseSaving(false);
+          }
+        }}
+      />
       <View style={[styles.nav, { borderBottomColor: theme.border }]}>
         <Pressable onPress={() => router.back()} style={styles.navBack} hitSlop={12}>
           <Ionicons name="arrow-back" size={22} color={theme.text} />
@@ -237,35 +309,43 @@ export default function OrderDetailScreen() {
             {RIDER_STATUS_LABELS[order.orderStatus] ?? order.orderStatus}
           </ThemedText>
         </View>
-        <View style={{ width: 32 }} />
+        {chatEnabled ? <OrderChatButton orderId={order._id} compact enabled /> : <View style={{ width: 32 }} />}
       </View>
-
-      {!isAvailable ? (
-        <View style={styles.mapSection}>
-          <Pressable
-            onPress={() => router.push(`/order/map/${orderId}` as never)}
-            style={[styles.expandMapBtn, { backgroundColor: theme.backgroundElement, borderColor: theme.border }]}
-          >
-            <Ionicons name="expand-outline" size={16} color={theme.primary} />
-            <ThemedText type="small" style={{ color: theme.primary, fontFamily: Fonts.bold }}>
-              Open full trip map
-            </ThemedText>
-          </Pressable>
-        </View>
-      ) : null}
 
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         <View style={styles.progressSection}>
           <DeliveryProgressBar status={order.orderStatus} />
         </View>
 
-        <OrderLocationBlock
-          type="pickup"
-          title="Pickup from"
-          name={restaurantName}
-          address={formatRestaurantAddress(order)}
-          phone={restaurantPhone}
-        />
+        {pickups.length > 1 ? (
+          <OrderPickupsSummaryBlock
+            title={`Pickups · ${pickups.length} shops`}
+            names={pickups.map((p) => p.restaurantName || 'Store')}
+            addresses={pickups.map((p) => formatPickupAddress(p))}
+          />
+        ) : pickups.length ? (
+          pickups.map((pickup, index) => (
+            <OrderLocationBlock
+              key={pickup._id || `pickup-${index}`}
+              type="pickup"
+              title={
+                pickups.length > 1
+                  ? `Pickup ${index + 1} of ${pickups.length}`
+                  : 'Pickup from'
+              }
+              name={pickup.restaurantName || formatPickupNames(order)}
+              address={formatPickupAddress(pickup)}
+              phone={pickup.phone}
+            />
+          ))
+        ) : (
+          <OrderLocationBlock
+            type="pickup"
+            title="Pickup from"
+            name={formatPickupNames(order)}
+            address="Restaurant address on file"
+          />
+        )}
         <OrderLocationBlock
           type="drop"
           title="Deliver to"
@@ -274,26 +354,155 @@ export default function OrderDetailScreen() {
           phone={customer?.mobile}
         />
 
+        {chatEnabled ? <OrderChatButton orderId={order._id} enabled /> : null}
+
+        {awaitingCustomer ? (
+          <View
+            style={[
+              styles.noteCard,
+              cardStyle,
+              { backgroundColor: theme.dangerSoft ?? '#FEE2E2', borderColor: theme.danger },
+            ]}
+          >
+            <ThemedText type="label" style={{ color: theme.danger }}>
+              Out of stock reported
+            </ThemedText>
+            <ThemedText style={styles.noteBody}>
+              Customer was notified to cancel and place a new order. You are released from this
+              delivery.
+            </ThemedText>
+          </View>
+        ) : null}
+
+        {customerNote ? (
+          <View
+            style={[
+              styles.noteCard,
+              cardStyle,
+              { backgroundColor: theme.primarySoft, borderColor: theme.border },
+            ]}
+          >
+            <ThemedText type="label" style={{ color: theme.primary }}>
+              Customer note / comments
+            </ThemedText>
+            <ThemedText style={styles.noteBody}>{customerNote}</ThemedText>
+          </View>
+        ) : null}
+
         <View style={[styles.summaryCard, cardStyle, { backgroundColor: theme.backgroundElement }]}>
           <ThemedText type="label" themeColor="textSecondary">
             Order summary
           </ThemedText>
+          {pickups.length > 1 ? (
+            <ThemedText type="small" themeColor="textSecondary" style={{ marginTop: 4 }}>
+              {formatPickupNames(order)}
+            </ThemedText>
+          ) : null}
+          {showOosReport ? (
+            <ThemedText type="small" themeColor="textSecondary" style={{ marginTop: Spacing.two }}>
+              Tap items that are out of stock, then report below.
+            </ThemedText>
+          ) : null}
+
           {items.length ? (
             <View style={styles.itemsList}>
-              {items.map((item, i) => (
-                <View key={i} style={[styles.itemRow, i > 0 && { borderTopColor: theme.border, borderTopWidth: 1 }]}>
-                  <ThemedText style={styles.itemQty}>{item.quantity}x</ThemedText>
-                  <ThemedText style={styles.itemName} numberOfLines={2}>
-                    {item.itemName}
-                  </ThemedText>
-                </View>
-              ))}
+              {items.map((item, i) => {
+                const itemId = String(item.id ?? item._id ?? '');
+                const itemStoreId = (item as { restaurantId?: string }).restaurantId;
+                const storeLabel =
+                  pickups.length > 1 && itemStoreId
+                    ? pickups.find((p) => p._id === itemStoreId)?.restaurantName
+                    : null;
+                const itemNote = String(
+                  (item as { specialInstructions?: string | null }).specialInstructions || '',
+                ).trim();
+                const isUnavailable =
+                  String(item.fulfillmentStatus ?? '').toUpperCase() === 'UNAVAILABLE';
+                const selected = Boolean(itemId && selectedOosIds.includes(itemId));
+                const row = (
+                  <>
+                    {showOosReport && itemId && !isUnavailable ? (
+                      <Ionicons
+                        name={selected ? 'checkbox' : 'square-outline'}
+                        size={22}
+                        color={selected ? theme.danger : theme.textSecondary}
+                      />
+                    ) : null}
+                    <ThemedText style={styles.itemQty}>{item.quantity}x</ThemedText>
+                    <View style={{ flex: 1, minWidth: 0 }}>
+                      <ThemedText
+                        style={[styles.itemName, isUnavailable && { color: theme.danger }]}
+                        numberOfLines={2}
+                      >
+                        {item.itemName}
+                      </ThemedText>
+                      {isUnavailable ? (
+                        <ThemedText type="small" style={{ color: theme.danger, marginTop: 2 }}>
+                          Out of stock
+                        </ThemedText>
+                      ) : null}
+                      {storeLabel ? (
+                        <ThemedText type="small" themeColor="textSecondary" numberOfLines={1}>
+                          {storeLabel}
+                        </ThemedText>
+                      ) : null}
+                      {itemNote ? (
+                        <ThemedText type="small" style={{ color: theme.primary, marginTop: 2 }} numberOfLines={3}>
+                          Note: {itemNote}
+                        </ThemedText>
+                      ) : null}
+                    </View>
+                  </>
+                );
+                return showOosReport && itemId && !isUnavailable ? (
+                  <Pressable
+                    key={itemId || i}
+                    onPress={() => toggleOosItem(itemId)}
+                    style={[styles.itemRow, i > 0 && { borderTopColor: theme.border, borderTopWidth: 1 }]}
+                  >
+                    {row}
+                  </Pressable>
+                ) : (
+                  <View
+                    key={itemId || i}
+                    style={[styles.itemRow, i > 0 && { borderTopColor: theme.border, borderTopWidth: 1 }]}
+                  >
+                    {row}
+                  </View>
+                );
+              })}
             </View>
           ) : (
             <ThemedText type="small" themeColor="textSecondary" style={{ marginTop: Spacing.two }}>
               {count ? `${count} items` : 'Item list not available'}
             </ThemedText>
           )}
+
+          {showOosReport ? (
+            <Pressable
+              onPress={confirmReportOos}
+              disabled={oosMut.isPending || !selectedOosIds.length}
+              style={[
+                styles.oosBtn,
+                {
+                  borderColor: theme.danger,
+                  opacity: oosMut.isPending || !selectedOosIds.length ? 0.45 : 1,
+                },
+              ]}
+            >
+              {oosMut.isPending ? (
+                <ActivityIndicator color={theme.danger} />
+              ) : (
+                <>
+                  <Ionicons name="alert-circle-outline" size={18} color={theme.danger} />
+                  <ThemedText style={[styles.oosBtnText, { color: theme.danger }]}>
+                    Report out of stock
+                    {selectedOosIds.length ? ` (${selectedOosIds.length})` : ''}
+                  </ThemedText>
+                </>
+              )}
+            </Pressable>
+          ) : null}
 
           <View style={[styles.totalsRow, { borderTopColor: theme.border }]}>
             <ThemedText style={styles.totalLabel}>Order total</ThemedText>
@@ -330,8 +539,8 @@ export default function OrderDetailScreen() {
               <Ionicons name="card-outline" size={16} color={theme.partner} />
               <ThemedText style={[styles.codText, { color: theme.partner }]}>
                 {pay === 'COLLECTED' || pay === 'APPROVED'
-                  ? 'Bank � Settled � collect no cash'
-                  : 'Bank � Deliver now � payment verifies after delivery'}
+                  ? 'Bank · Settled — collect no cash'
+                  : 'Bank · Deliver now — payment verifies after delivery'}
               </ThemedText>
             </View>
           )}
@@ -364,7 +573,13 @@ export default function OrderDetailScreen() {
               busy={actionMut.isPending}
               disabled={actionMut.isPending}
               onConfirm={() => {
-                if (next === 'complete' && order.paymentMethod === 'COD') {
+                const deferredFee = Boolean(
+                  (order as { deliveryFeeDeferred?: boolean }).deliveryFeeDeferred ||
+                    (order as { settlement?: { deliveryFeeDeferred?: boolean } }).settlement
+                      ?.deliveryFeeDeferred,
+                );
+                // COD always, and Get Anything (any pay method) — rider sets fee + customer confirms.
+                if (next === 'complete' && (order.paymentMethod === 'COD' || deferredFee)) {
                   router.push(`/order/payment/${orderId}` as never);
                   setSwipeKey((k) => k + 1);
                   return;
@@ -394,21 +609,30 @@ const styles = StyleSheet.create({
   navTitle: { fontSize: 16, fontFamily: Fonts.extraBold },
   scroll: { padding: Layout.screenPadding, paddingBottom: Spacing.four },
   progressSection: { marginBottom: Spacing.three },
-  mapSection: { marginBottom: Spacing.three, paddingHorizontal: Layout.screenPadding, gap: Spacing.two },
-  expandMapBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    paddingVertical: 10,
-    borderRadius: Layout.inputRadius,
-    borderWidth: 1,
-  },
   summaryCard: { padding: Spacing.three },
+  noteCard: {
+    padding: Spacing.three,
+    marginBottom: Spacing.two,
+    borderWidth: 1,
+    gap: 6,
+  },
+  noteBody: { fontSize: 14, fontFamily: Fonts.medium, lineHeight: 20 },
   itemsList: { marginTop: Spacing.two },
   itemRow: { flexDirection: 'row', gap: Spacing.two, paddingVertical: 10 },
   itemQty: { fontSize: 14, fontFamily: Fonts.bold, width: 28 },
   itemName: { flex: 1, fontSize: 14, fontFamily: Fonts.medium },
+  oosBtn: {
+    marginTop: Spacing.three,
+    borderWidth: 1,
+    borderRadius: Layout.buttonRadius,
+    paddingVertical: 12,
+    paddingHorizontal: Spacing.three,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  oosBtnText: { fontSize: 14, fontFamily: Fonts.bold },
   totalsRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',

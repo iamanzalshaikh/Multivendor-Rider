@@ -63,9 +63,13 @@ export async function apiFetch<T = unknown>(
   }
 
   if (init?._retry || isAuthPath(path)) {
-    const err = new Error('Email or password is incorrect. Please try again.') as ApiError;
-    err.status = 401;
-    throw err;
+    const text = await res.text();
+    const data = text ? (JSON.parse(text) as Json) : null;
+    throw apiErrorFromResponse(
+      401,
+      data as { message?: string; error?: string },
+      'Email or password is incorrect. Please try again.',
+    );
   }
 
   if (!refreshPromise) {

@@ -20,9 +20,9 @@ import { Brand, Fonts, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { extractApiErrorMessage } from '@/lib/apiErrors';
 import { dialog } from '@/lib/dialog';
-import { forgotPassword, resetPassword } from '@/services/auth';
+import { forgotPassword, resetPassword, verifyResetOtp } from '@/services/auth';
 
-type Step = 'email' | 'reset';
+type Step = 'email' | 'otp' | 'password';
 
 export default function ForgotPasswordScreen() {
   const theme = useTheme();
@@ -46,10 +46,33 @@ export default function ForgotPasswordScreen() {
     setBusy(true);
     try {
       await forgotPassword(email.trim().toLowerCase());
-      setStep('reset');
-      dialog.alert('Check your email', 'We sent a 6-digit verification code to your Gmail / inbox.');
+      setOtp('');
+      setStep('otp');
+      dialog.alert('Check your email', 'We sent a 6-digit verification code to your inbox.');
     } catch (e) {
       setError(extractApiErrorMessage(e, 'Failed to send verification code'));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function onVerifyOtp() {
+    setError(null);
+    if (otp.length !== 6) {
+      setError('Enter the 6-digit code from your email');
+      return;
+    }
+    setBusy(true);
+    try {
+      await verifyResetOtp({
+        email: email.trim().toLowerCase(),
+        otp,
+      });
+      setPassword('');
+      setConfirmPassword('');
+      setStep('password');
+    } catch (e) {
+      setError(extractApiErrorMessage(e, 'Invalid or expired verification code'));
     } finally {
       setBusy(false);
     }
@@ -59,6 +82,7 @@ export default function ForgotPasswordScreen() {
     setError(null);
     if (otp.length !== 6) {
       setError('Enter the 6-digit code from your email');
+      setStep('otp');
       return;
     }
     if (password.length < 6) {
@@ -86,31 +110,53 @@ export default function ForgotPasswordScreen() {
     }
   }
 
+  const heroTitle =
+    step === 'email' ? 'Forgot password' : step === 'otp' ? 'Verify code' : 'New password';
+  const heroSub =
+    step === 'email'
+      ? 'Enter your registered email. We only send a code if the account exists.'
+      : step === 'otp'
+        ? `Enter the 6-digit code sent to ${email.trim().toLowerCase()}.`
+        : 'Choose a new password for your rider account.';
+
+  const primaryAction =
+    step === 'email' ? sendOtp : step === 'otp' ? onVerifyOtp : onReset;
+  const primaryLabel =
+    step === 'email'
+      ? 'Send verification code'
+      : step === 'otp'
+        ? 'Verify code'
+        : 'Update password';
+
   return (
     <View style={[styles.root, { backgroundColor: theme.background }]}>
       <StatusBar style="light" />
       <View style={styles.hero}>
-        <Pressable onPress={() => router.back()} style={styles.backBtn} hitSlop={10}>
+        <Pressable
+          onPress={() => {
+            if (step === 'password') setStep('otp');
+            else if (step === 'otp') setStep('email');
+            else router.back();
+          }}
+          style={styles.backBtn}
+          hitSlop={10}
+        >
           <Ionicons name="arrow-back" size={20} color="#fff" />
         </Pressable>
         <ThemedText style={styles.heroBadge}>SD Services Partner</ThemedText>
-        <ThemedText style={styles.heroTitle}>
-          {step === 'email' ? 'Forgot password' : 'Verify & reset'}
-        </ThemedText>
-        <ThemedText style={styles.heroSub}>
-          {step === 'email'
-            ? 'We’ll email a one-time code to verify your Gmail, then you can set a new password.'
-            : `Enter the code sent to ${email.trim().toLowerCase()} and choose a new password.`}
-        </ThemedText>
+        <ThemedText style={styles.heroTitle}>{heroTitle}</ThemedText>
+        <ThemedText style={styles.heroSub}>{heroSub}</ThemedText>
       </View>
 
       <KeyboardAvoidingView
         style={styles.flex}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      >
         <ScrollView
           contentContainerStyle={styles.scroll}
           keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}>
+          showsVerticalScrollIndicator={false}
+        >
           <View style={[styles.card, cardStyle, { backgroundColor: theme.backgroundElement }]}>
             <ThemedText type="label" themeColor="textSecondary">
               Gmail / Email
@@ -134,7 +180,7 @@ export default function ForgotPasswordScreen() {
               ]}
             />
 
-            {step === 'reset' ? (
+            {step === 'otp' || step === 'password' ? (
               <>
                 <ThemedText type="label" themeColor="textSecondary" style={styles.labelGap}>
                   Email verification code
@@ -142,16 +188,26 @@ export default function ForgotPasswordScreen() {
                 <TextInput
                   value={otp}
                   onChangeText={(v) => setOtp(v.replace(/\D/g, '').slice(0, 6))}
+                  editable={step === 'otp'}
                   keyboardType="number-pad"
                   maxLength={6}
                   placeholder="000000"
                   placeholderTextColor={theme.textSecondary}
                   style={[
                     styles.input,
-                    { color: theme.text, borderColor: theme.border, fontFamily: Fonts.medium },
+                    {
+                      color: theme.text,
+                      borderColor: theme.border,
+                      fontFamily: Fonts.medium,
+                      opacity: step === 'otp' ? 1 : 0.65,
+                    },
                   ]}
                 />
+              </>
+            ) : null}
 
+            {step === 'password' ? (
+              <>
                 <ThemedText type="label" themeColor="textSecondary" style={styles.labelGap}>
                   New password
                 </ThemedText>
@@ -203,19 +259,18 @@ export default function ForgotPasswordScreen() {
             ) : null}
 
             <Pressable
-              onPress={step === 'email' ? sendOtp : onReset}
+              onPress={primaryAction}
               disabled={busy}
-              style={[styles.button, { backgroundColor: theme.primary, opacity: busy ? 0.7 : 1 }]}>
+              style={[styles.button, { backgroundColor: theme.primary, opacity: busy ? 0.7 : 1 }]}
+            >
               {busy ? (
                 <ActivityIndicator color="#fff" />
               ) : (
-                <ThemedText style={styles.buttonText}>
-                  {step === 'email' ? 'Send verification code' : 'Update password'}
-                </ThemedText>
+                <ThemedText style={styles.buttonText}>{primaryLabel}</ThemedText>
               )}
             </Pressable>
 
-            {step === 'reset' ? (
+            {step === 'otp' ? (
               <Pressable onPress={sendOtp} disabled={busy} style={styles.resend}>
                 <ThemedText type="small" style={{ color: theme.primary, fontFamily: Fonts.bold }}>
                   Resend code to email

@@ -7,6 +7,7 @@ export const riderKeys = {
   history: (page: number, limit: number) => ['rider', 'history', page, limit] as const,
   availableOrders: ['rider', 'available-orders'] as const,
   order: (orderId: string) => ['rider', 'order', orderId] as const,
+  chat: (orderId: string) => ['rider', 'chat', orderId] as const,
   shiftPurchases: ['rider', 'shift-purchases'] as const,
   pastShifts: ['rider', 'past-shifts'] as const,
 };

@@ -7,6 +7,14 @@ export async function forgotPassword(email: string) {
   });
 }
 
+/** Verify reset OTP before allowing the new-password step. */
+export async function verifyResetOtp(input: { email: string; otp: string }) {
+  return apiFetch('/auth/verify-otp', {
+    method: 'POST',
+    body: JSON.stringify({ ...input, purpose: 'reset' }),
+  });
+}
+
 export async function resetPassword(input: {
   email: string;
   otp: string;

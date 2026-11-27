@@ -19,6 +19,7 @@ import { useTheme } from '@/hooks/use-theme';
 import { formatJmd } from '@/lib/money';
 import {
   formatDeliveryAddress,
+  formatPickupNames,
   formatRestaurantAddress,
 } from '@/lib/orderDisplay';
 import { fetchOrderById } from '@/services/riders';
@@ -52,8 +53,8 @@ function customerName(order: RiderOrder): string {
 }
 
 function pickupLabel(order: RiderOrder): string {
-  const r = order.restaurantId;
-  if (r && typeof r === 'object' && r.restaurantName) return r.restaurantName;
+  const names = formatPickupNames(order);
+  if (names && names !== 'Restaurant') return names;
   return formatRestaurantAddress(order);
 }
 

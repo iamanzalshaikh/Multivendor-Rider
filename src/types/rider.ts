@@ -37,15 +37,32 @@ export type RiderUser = {
 };
 
 export type RiderOrderItem = {
+  id?: string;
+  _id?: string;
+  itemType?: string;
   itemName: string;
   quantity: number;
   price?: number;
+  restaurantId?: string;
+  specialInstructions?: string | null;
+  fulfillmentStatus?: string | null;
+  unavailableReason?: string | null;
+};
+
+export type RiderChatMessage = {
+  id: string;
+  _id?: string;
+  body: string;
+  senderId?: string;
+  senderRole?: 'CUSTOMER' | 'RIDER' | 'OTHER' | string;
+  createdAt?: string;
 };
 
 export type RiderOrder = {
   _id: string;
   orderNumber?: string;
   orderStatus: string;
+  awaitingCustomerDecision?: boolean;
   paymentMethod?: string;
   paymentStatus?: string;
   grandTotal: number;
@@ -57,10 +74,19 @@ export type RiderOrder = {
   walletDeduction?: number;
   /** Rider's earning for this trip is the delivery fee plus any tip */
   deliveryFee?: number;
+  /** Get Anything — fee is set by rider at delivery, confirmed by customer. */
+  deliveryFeeDeferred?: boolean;
+  settlement?: {
+    deliveryFeeDeferred?: boolean;
+    pendingDeliveryFee?: number | null;
+  } | null;
   tipAmount?: number;
   /** Set by the complete-delivery response — what was actually credited */
   earnedAmount?: number;
   orderSize?: string | null;
+  /** Customer order-level note / comments */
+  generalNote?: string | null;
+  notes?: string | null;
   items?: RiderOrderItem[];
   orderItems?: RiderOrderItem[];
   deliveryAddress?: {
@@ -89,6 +115,18 @@ export type RiderOrder = {
     address?: { street?: string; city?: string };
     location?: { coordinates?: [number, number] };
   };
+  /** All stores on multi-store CASE orders (primary + secondary pickups). */
+  pickups?: Array<{
+    _id: string;
+    restaurantName?: string;
+    phone?: string;
+    latitude?: number;
+    longitude?: number;
+    addressStreet?: string;
+    addressCity?: string;
+    address?: { street?: string; city?: string };
+  }>;
+  storeNames?: string[];
   deliveryPoint?: {
     id?: string;
     name?: string;

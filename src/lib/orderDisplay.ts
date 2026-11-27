@@ -1,5 +1,41 @@
 import type { RiderOrder } from '@/types/rider';
 
+export type RiderPickup = NonNullable<RiderOrder['pickups']>[number];
+
+/** Every store the rider must visit (multi-store CASE orders). */
+export function orderPickups(order: RiderOrder): RiderPickup[] {
+  if (order.pickups?.length) return order.pickups;
+  if (order.storeNames?.length) {
+    return order.storeNames.map((restaurantName, i) => ({
+      _id: `name-${i}`,
+      restaurantName,
+    }));
+  }
+  const primary = order.restaurantId;
+  if (primary && typeof primary === 'object') return [primary];
+  return [];
+}
+
+export function formatPickupNames(order: RiderOrder): string {
+  const pickups = orderPickups(order);
+  if (pickups.length) {
+    return pickups.map((p) => p.restaurantName || 'Store').join(' · ');
+  }
+  return typeof order.restaurantId === 'object'
+    ? order.restaurantId?.restaurantName ?? 'Restaurant'
+    : 'Restaurant';
+}
+
+export function formatPickupAddress(pickup: RiderPickup): string {
+  const nested = pickup.address;
+  if (nested && typeof nested === 'object') {
+    const line = [nested.street, nested.city].filter(Boolean).join(', ');
+    if (line) return line;
+  }
+  const flat = [pickup.addressStreet, pickup.addressCity].filter(Boolean).join(', ');
+  return flat || 'Restaurant address on file';
+}
+
 export function formatDeliveryAddress(order: RiderOrder): string {
   const point = (order as { deliveryPoint?: { name?: string; campus?: string } }).deliveryPoint;
   if (point?.name) {

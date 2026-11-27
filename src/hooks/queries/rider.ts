@@ -1,4 +1,4 @@
-import { useQuery, type QueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
 
 import { usePerfQuery } from '@/lib/perf';
 import {
@@ -7,8 +7,10 @@ import {
   fetchDeliveryHistory,
   fetchEarningsSummary,
   fetchOrderById,
+  fetchOrderChat,
   fetchRiderEarnings,
   fetchRiderMe,
+  sendOrderChat,
 } from '@/services/riders';
 
 import { riderKeys } from './keys';
@@ -163,6 +165,26 @@ export function prefetchRiderOrder(qc: QueryClient, orderId: string) {
     queryKey: riderKeys.order(orderId),
     queryFn: () => fetchOrderById(orderId),
     staleTime: ACTIVE_ORDER_STALE,
+  });
+}
+
+export function useRiderOrderChatQuery(orderId: string | undefined, enabled = true) {
+  return useQuery({
+    queryKey: riderKeys.chat(orderId ?? ''),
+    queryFn: () => fetchOrderChat(orderId!),
+    enabled: Boolean(orderId) && enabled,
+    staleTime: 8_000,
+    refetchInterval: 12_000,
+  });
+}
+
+export function useSendRiderChatMutation(orderId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (message: string) => sendOrderChat(orderId, message),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: riderKeys.chat(orderId) });
+    },
   });
 }
 
