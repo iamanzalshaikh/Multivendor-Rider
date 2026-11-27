@@ -6,6 +6,7 @@ import {
   Pressable,
   ActivityIndicator,
   Image,
+  Modal,
   ScrollView,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -92,6 +93,7 @@ export default function OrderDetailScreen() {
   const [swipeKey, setSwipeKey] = useState(0);
   const { pickEta, etaPickerModal } = useEtaPicker();
   const [purchaseOpen, setPurchaseOpen] = useState(false);
+  const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const [purchaseSaving, setPurchaseSaving] = useState(false);
 
   const orderQ = useRiderOrderQuery(orderId);
@@ -283,6 +285,16 @@ export default function OrderDetailScreen() {
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: theme.background }]} edges={['top', 'bottom']}>
       {etaPickerModal}
+      <Modal visible={Boolean(photoPreview)} transparent animationType="fade" onRequestClose={() => setPhotoPreview(null)}>
+        <Pressable style={styles.photoOverlay} onPress={() => setPhotoPreview(null)}>
+          {photoPreview ? (
+            <Image source={{ uri: photoPreview }} style={styles.photoFull} resizeMode="contain" />
+          ) : null}
+          <Pressable style={styles.photoClose} onPress={() => setPhotoPreview(null)} hitSlop={12}>
+            <Ionicons name="close" size={26} color="#fff" />
+          </Pressable>
+        </Pressable>
+      </Modal>
       <PurchaseAmountModal
         visible={purchaseOpen}
         lines={getAnythingLines(order)}
@@ -454,12 +466,17 @@ export default function OrderDetailScreen() {
                       {item.imageUrls && item.imageUrls.length > 0 ? (
                         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 8 }} contentContainerStyle={{ gap: 8 }}>
                           {item.imageUrls.map((url, k) => (
-                            <Image
+                            <Pressable
                               key={`${url}-${k}`}
-                              source={{ uri: url }}
-                              accessibilityLabel="Customer reference photo"
-                              style={{ width: 96, height: 96, borderRadius: 10, backgroundColor: theme.backgroundElement }}
-                            />
+                              onPress={() => setPhotoPreview(url)}
+                              accessibilityRole="imagebutton"
+                              accessibilityLabel="Open customer reference photo"
+                            >
+                              <Image
+                                source={{ uri: url }}
+                                style={{ width: 96, height: 96, borderRadius: 10, backgroundColor: theme.backgroundElement }}
+                              />
+                            </Pressable>
                           ))}
                         </ScrollView>
                       ) : null}
@@ -617,6 +634,9 @@ export default function OrderDetailScreen() {
 }
 
 const styles = StyleSheet.create({
+  photoOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.92)', alignItems: 'center', justifyContent: 'center' },
+  photoFull: { width: '100%', height: '80%' },
+  photoClose: { position: 'absolute', top: 48, right: 20, padding: 8 },
   safe: { flex: 1 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: Spacing.four },
   nav: {
